@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Delta Works — Solution Map</title>
+    <link rel="stylesheet" href="https://js.arcgis.com/4.27/esri/themes/light/main.css">
+    <script src="https://js.arcgis.com/4.27/"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+:root {
+    --color-forest:         #1B3A2D;
+    --color-forest-light:   #2C5F41;
+    --color-sage:           #7A9E7E;
+    --color-sage-light:     #B5CDB6;
+    --color-sand:           #F4EDE4;
+    --color-sand-dark:      #E8DFD3;
+    --color-water-light:    #F0C4A8;
+    --color-accent:         #C85A3A;
+    --color-text:           #2D2A26;
+    --color-text-secondary: #6B6560;
+    --color-white:          #FEFDFB;
+    --font-display:         'DM Serif Display', Georgia, serif;
+    --font-body:            'Source Sans 3', -apple-system, sans-serif;
+    --panel-width:          420px;
+    --radius-sm:            6px;
+    --radius-md:            12px;
+    --shadow-md:            0 4px 16px rgba(27,58,45,0.12);
+    --shadow-lg:            0 8px 32px rgba(27,58,45,0.16);
+    --transition-fast:      0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-smooth:    0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html, body {
+    height: 100%; height: 100dvh;
+    overflow: hidden;
+    font-family: var(--font-body);
+    background: var(--color-sand);
+    color: var(--color-text);
+    -webkit-font-smoothing: antialiased;
+}
+
+#viewDiv { position: fixed; inset: 0; background: #F6F1EC; }
+
+/* ── LOADING ── */
+#loading {
+    position: fixed; inset: 0;
+    background: var(--color-sand);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 10000;
+    transition: opacity 0.6s ease;
+}
+#loading.hidden { opacity: 0; pointer-events: none; }
+.loading-spinner {
+    width: 40px; height: 40px;
+    border: 3px solid var(--color-sand-dark);
+    border-top-color: var(--color-forest);
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.esri-popup { display: none !important; }
+
+/* ── START BUTTON (whole map on screen) ── */
+#startBtn {
+    position: fixed;
+    left: 50%; bottom: 40px;
+    transform: translateX(-50%);
+    z-index: 900;
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 18px 10px 12px;
+    background: var(--color-white);
+    border: 1px solid var(--color-sand-dark);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+    font-family: var(--font-body);
+    font-size: 14px; font-weight: 600;
+    color: var(--color-forest);
+    cursor: pointer;
+    opacity: 0; pointer-events: none;
+    transition: opacity var(--transition-smooth), background var(--transition-fast);
+}
+#startBtn.on { opacity: 1; pointer-events: auto; }
+#startBtn:hover { background: var(--color-sand); }
+#startBtn .start-icon {
+    width: 30px; height: 30px;
+    background: var(--color-forest);
+    border-radius: var(--radius-sm);
+    display: flex; align-items: center; justify-content: center;
+}
+#startBtn .start-icon svg { width: 15px; height: 15px; color: var(--color-sage); }
+
+/* ── SIDE PANEL (RIGHT), same layout as the Drava map ── */
+.side-panel {
+    position: fixed;
+    top: 0; right: 0; bottom: 0;
+    width: var(--panel-width);
+    background: var(--color-white);
+    box-shadow: var(--shadow-lg);
+    display: flex;
+    flex-direction: column;
+    z-index: 950;
+    overflow: hidden;
+    transform: translateX(100%);
+    transition: transform var(--transition-smooth);
+}
+.side-panel.visible { transform: translateX(0); }
+
+.panel-close {
+    position: absolute;
+    top: 16px; right: 16px;
+    width: 36px; height: 36px;
+    background: rgba(27,58,45,0.7);
+    backdrop-filter: blur(8px);
+    color: var(--color-white);
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 18px;
+    display: flex; align-items: center; justify-content: center;
+    transition: var(--transition-fast);
+    z-index: 5;
+}
+.panel-close:hover { background: var(--color-forest); transform: scale(1.08); }
+
+/* Video gallery (in place of the photo gallery) */
+.panel-gallery {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    background: var(--color-sand-dark);
+    overflow: hidden;
+    flex-shrink: 0;
+}
+.panel-gallery.empty { display: none; }
+.gallery-track {
+    display: flex;
+    height: 100%;
+    transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.gallery-slide { min-width: 100%; height: 100%; }
+.gallery-slide iframe { width: 100%; height: 100%; border: 0; display: block; }
+
+.gallery-dots {
+    position: absolute;
+    bottom: 12px; left: 50%;
+    transform: translateX(-50%);
+    display: flex; gap: 8px;
+    z-index: 3;
+}
+.gallery-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.5);
+    border: none; padding: 0;
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+.gallery-dot.active { background: var(--color-white); transform: scale(1.3); }
+
+.gallery-nav {
+    position: absolute;
+    top: 50%; transform: translateY(-50%);
+    width: 36px; height: 36px;
+    background: rgba(27,58,45,0.5);
+    backdrop-filter: blur(4px);
+    color: white;
+    border: none; border-radius: 50%;
+    cursor: pointer;
+    font-size: 16px;
+    display: flex; align-items: center; justify-content: center;
+    transition: var(--transition-fast);
+    z-index: 3;
+}
+.gallery-nav:hover { background: rgba(27,58,45,0.8); }
+.gallery-nav.prev { left: 12px; }
+.gallery-nav.next { right: 12px; }
+.panel-gallery.single .gallery-nav,
+.panel-gallery.single .gallery-dots { display: none; }
+
+/* Enlarge button (same hint as the Drava photos) */
+.gallery-enlarge {
+    position: absolute;
+    top: 16px; left: 16px;
+    height: 32px;
+    padding: 0 10px;
+    background: rgba(27,58,45,0.7);
+    backdrop-filter: blur(8px);
+    color: white;
+    border: none; border-radius: 16px;
+    cursor: pointer;
+    display: flex; align-items: center; gap: 6px;
+    font-family: var(--font-body); font-size: 12px; font-weight: 600;
+    transition: var(--transition-fast);
+    z-index: 4;
+}
+.gallery-enlarge:hover { background: var(--color-forest); }
+.gallery-enlarge svg { width: 13px; height: 13px; }
+
+/* Panel content */
+.panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-sand-dark) transparent;
+}
+.panel-body::-webkit-scrollbar { width: 5px; }
+.panel-body::-webkit-scrollbar-track { background: transparent; }
+.panel-body::-webkit-scrollbar-thumb { background: var(--color-sand-dark); border-radius: 3px; }
+
+.type-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    background: #E3F2FD; color: #1565C0;
+}
+
+#locationName {
+    font-family: var(--font-display);
+    font-size: 24px;
+    font-weight: 400;
+    color: var(--color-forest);
+    line-height: 1.3;
+    margin-bottom: 16px;
+}
+
+.panel-divider {
+    width: 40px; height: 2px;
+    background: var(--color-sage-light);
+    margin-bottom: 16px;
+    border-radius: 1px;
+}
+
+#locationDescription {
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.8;
+    color: var(--color-text-secondary);
+    white-space: pre-line;
+}
+
+#locationLinks { margin-top: 14px; display: flex; flex-direction: column; gap: 4px; }
+#locationLinks a {
+    font-size: 12px; font-weight: 600;
+    color: var(--color-forest-light);
+    text-decoration: none;
+}
+#locationLinks a:hover { text-decoration: underline; }
+
+.panel-counter {
+    padding: 16px 24px;
+    border-top: 1px solid var(--color-sand-dark);
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--color-white);
+    flex-shrink: 0;
+}
+.counter-text {
+    font-size: 11px; font-weight: 500;
+    color: var(--color-text-secondary);
+    letter-spacing: 0.04em;
+}
+.panel-nav-btns { display: flex; gap: 6px; }
+.panel-nav-btn {
+    width: 36px; height: 36px;
+    border: 1px solid var(--color-sand-dark);
+    background: var(--color-white);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: var(--transition-fast);
+    color: var(--color-text);
+}
+.panel-nav-btn:hover { background: var(--color-sand); border-color: var(--color-sage-light); }
+.panel-nav-btn svg { width: 16px; height: 16px; }
+
+/* ── LIGHTBOX for the video (same look as the Drava photo lightbox) ── */
+#lightbox {
+    position: fixed; inset: 0;
+    background: rgba(15,30,20,0.88);
+    backdrop-filter: blur(6px);
+    z-index: 9000;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+#lightbox.open { opacity: 1; pointer-events: auto; }
+.lightbox-frame {
+    width: min(88vw, calc(88vh * 16 / 9));
+    aspect-ratio: 16 / 9;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+    background: #000;
+    transform: scale(0.95);
+    transition: transform 0.3s ease;
+}
+#lightbox.open .lightbox-frame { transform: scale(1); }
+.lightbox-frame iframe { width: 100%; height: 100%; border: 0; display: block; }
+#lightbox-close {
+    position: absolute; top: 18px; right: 18px;
+    width: 36px; height: 36px;
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 50%;
+    color: white; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.2s;
+}
+#lightbox-close:hover { background: rgba(255,255,255,0.22); }
+#lightbox-close svg { width: 16px; height: 16px; }
+
+/* ── SCALE BAR: plain black line with ticks on top (in the ArcGIS UI, bottom-left) ── */
+.scalebar {
+    background: rgba(254,253,251,0.88);
+    border-radius: var(--radius-sm);
+    padding: 4px 6px 0;
+    line-height: 0;
+    pointer-events: none;
+}
+.scalebar svg { display: block; overflow: visible; }
+.scalebar text { font-family: var(--font-body); font-size: 11px; font-weight: 600; fill: #000; }
+
+/* ArcGIS overrides */
+.esri-ui-corner { margin: 12px; }
+.esri-widget--button { border-radius: var(--radius-sm) !important; }
+
+/* ── RESPONSIVE (same breakpoints as the Drava map) ── */
+@media (max-width: 1024px) {
+    :root { --panel-width: 360px; }
+}
+@media (max-width: 768px) {
+    .side-panel { width: 300px; max-width: 80vw; }
+    .panel-body { padding: 16px; }
+    #locationName { font-size: 20px; margin-bottom: 12px; }
+    #locationDescription { font-size: 13px; line-height: 1.7; }
+    .panel-close { top: 12px; right: 12px; width: 32px; height: 32px; font-size: 16px; }
+    .panel-counter { padding: 12px 16px; }
+    #startBtn { bottom: 32px; }
+}
+    </style>
+</head>
+<body>
+
+<div id="loading"><div class="loading-spinner"></div></div>
+<div id="viewDiv"></div>
+
+<!-- Start button -->
+<button id="startBtn">
+    <span class="start-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+    </span>
+    Explore the Delta Works
+</button>
+
+<!-- Detail panel — RIGHT -->
+<aside class="side-panel" id="sidePanel">
+    <button class="panel-close" id="closeBtn" aria-label="Close">×</button>
+
+    <!-- Video gallery -->
+    <div class="panel-gallery single empty" id="panelGallery">
+        <div class="gallery-track" id="galleryTrack"></div>
+        <button class="gallery-enlarge" id="enlargeBtn" aria-label="Enlarge video">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+            Enlarge
+        </button>
+        <button class="gallery-nav prev" id="galleryPrev" aria-label="Previous video">‹</button>
+        <button class="gallery-nav next" id="galleryNext" aria-label="Next video">›</button>
+        <div class="gallery-dots" id="galleryDots"></div>
+    </div>
+
+    <!-- Content -->
+    <div class="panel-body">
+        <span class="type-badge">Delta Works</span>
+        <h2 id="locationName"></h2>
+        <div class="panel-divider"></div>
+        <p id="locationDescription"></p>
+        <div id="locationLinks"></div>
+    </div>
+
+    <!-- Counter & nav -->
+    <div class="panel-counter">
+        <span class="counter-text" id="counterText"></span>
+        <div class="panel-nav-btns">
+            <button class="panel-nav-btn" id="prevBtn" aria-label="Previous">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+            <button class="panel-nav-btn" id="nextBtn" aria-label="Next">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+        </div>
+    </div>
+</aside>
+
+<!-- Video lightbox -->
+<div id="lightbox">
+    <button id="lightbox-close" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </button>
+    <div class="lightbox-frame" id="lightboxFrame"></div>
+</div>
+
+<!-- Scale bar content (moved into the ArcGIS UI) -->
+<div class="scalebar" id="scalebar"></div>
+
+<script>
+require([
+    "esri/Map", "esri/views/MapView", "esri/layers/FeatureLayer", "esri/layers/GraphicsLayer",
+    "esri/Graphic", "esri/geometry/Extent"
+], function (Map, MapView, FeatureLayer, GraphicsLayer, Graphic, Extent) {
+
+    // ── DATA ──
+    const BASE       = "https://services3.arcgis.com/zhmVWeFi3qKWY2Y8/arcgis/rest/services/";
+    const URL_BANDS  = BASE + "DTM10_0_2_4_4326/FeatureServer/0";
+    const URL_ROUTE  = BASE + "TRACK_OLANDA_DEF_4326/FeatureServer/0";
+    const URL_POINTS = BASE + "WAYPOINTS_OLANDA_DEF_4326/FeatureServer/1";
+
+    // Map scale used for every stop (1 : SCALE_STOP). Smaller number = closer.
+    // The map has no basemap, so it has no zoom levels: the view is controlled by scale only.
+    const SCALE_STOP = 50000;
+    // Used only if the route cannot be loaded: order of the stops along the route
+    const ORDER_FALLBACK = [70, 4, 35, 99, 76, 72, 90, 88];
+    // The whole data window: what the user sees when the map opens
+    const HOME = new Extent({ xmin: 3.383, ymin: 51.249, xmax: 4.456, ymax: 51.882, spatialReference: { wkid: 4326 } });
+
+    // ── LAYERS ──
+    function fill(hex) {
+        return { type: "simple-fill", color: hex, outline: { color: hex, width: 0.5 } };
+    }
+
+    // Land in warm neutral tones (darker = lower). The blue elevation bands belong to the Problem map.
+    const bandsLayer = new FeatureLayer({
+        url: URL_BANDS, minScale: 0, maxScale: 0, popupEnabled: false,
+        renderer: {
+            type: "unique-value", field: "DN",
+            uniqueValueInfos: [
+                { value: "1",   symbol: fill("#D5C0A7") },  // land below sea level
+                { value: "2",   symbol: fill("#E3D5C4") },  // land 0 to 2 m
+                { value: "3",   symbol: fill("#EEE5DB") },  // land 2 to 4 m
+                { value: "0",   symbol: fill("#F6F1EC") },  // land more than 4 m
+                { value: "999", symbol: fill("#00a0f0") }   // water
+            ]
+        }
+    });
+
+    const routeLayer = new FeatureLayer({
+        url: URL_ROUTE, minScale: 0, maxScale: 0, popupEnabled: false,
+        renderer: { type: "simple", symbol: { type: "simple-line", color: "#d7263d", width: 2.5 } }
+    });
+
+    const pointsLayer = new FeatureLayer({
+        url: URL_POINTS, outFields: ["*"],
+        definitionExpression: "mappa = 'Solution'",
+        minScale: 0, maxScale: 0, popupEnabled: false,
+        renderer: {
+            type: "simple",
+            symbol: { type: "simple-marker", style: "circle", size: 11, color: "#ffe94d", outline: { color: "#1B3A2D", width: 1 } }
+        }
+    });
+
+    const tooltipLayer = new GraphicsLayer();
+    const map = new Map({ layers: [bandsLayer, routeLayer, pointsLayer, tooltipLayer] });
+
+    const view = new MapView({
+        container: "viewDiv",
+        map: map,
+        popupEnabled: false,
+        extent: HOME,
+        constraints: { minScale: 2300000, maxScale: 10000, snapToZoom: false }
+    });
+    try { view.background = { color: [246, 241, 236] }; } catch (e) {}
+
+    // ── STATE ──
+    let allPoints  = [];
+    let currentIdx = -1;
+    let started    = false;
+    let moveId     = 0;
+    function noop() {}
+
+    const panel    = document.getElementById("sidePanel");
+    const startBtn = document.getElementById("startBtn");
+
+    // ── MAP PADDING — keeps the point centred in the part of the map not covered by the panel ──
+    function updateMapPadding() {
+        const open = panel.classList.contains("visible");
+        view.padding = { top: 0, bottom: 0, left: 0, right: open ? panel.offsetWidth : 0 };
+    }
+
+    // ── VIDEO GALLERY ──
+    const gallery = document.getElementById("panelGallery");
+    const track   = document.getElementById("galleryTrack");
+    const dotsEl  = document.getElementById("galleryDots");
+    let videoIds  = [];
+    let gIdx      = 0;
+
+    function vimeoId(u) {
+        const m = /vimeo\.com\/(?:video\/)?(\d+)/.exec(u);
+        return m ? m[1] : null;
+    }
+    function linksOf(a) {
+        return String(a.link || "").split(/\s+/).filter(u => /^https?:\/\//.test(u));
+    }
+    function playerUrl(id, autoplay) {
+        return "https://player.vimeo.com/video/" + id + "?dnt=1" + (autoplay ? "&autoplay=1" : "");
+    }
+
+    function initGallery(urls) {
+        videoIds = urls.map(vimeoId).filter(Boolean);
+        track.innerHTML = "";
+        dotsEl.innerHTML = "";
+        videoIds.forEach((id, i) => {
+            const slide = document.createElement("div");
+            slide.className = "gallery-slide";
+            slide.innerHTML = '<iframe src="' + playerUrl(id, false) + '" title="Video ' + (i + 1) + '" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>';
+            track.appendChild(slide);
+            const dot = document.createElement("button");
+            dot.className = "gallery-dot";
+            dot.setAttribute("aria-label", "Video " + (i + 1));
+            dot.addEventListener("click", () => galleryGoTo(i));
+            dotsEl.appendChild(dot);
+        });
+        gallery.classList.toggle("empty", videoIds.length === 0);
+        gallery.classList.toggle("single", videoIds.length <= 1);
+        gIdx = 0;
+        updateGalleryPosition();
+    }
+
+    // Reloading an iframe is the simplest way to stop a video that is playing
+    function stopSlide(i) {
+        const fr = track.children[i] && track.children[i].querySelector("iframe");
+        if (fr && videoIds[i]) fr.src = playerUrl(videoIds[i], false);
+    }
+
+    function galleryGoTo(i) {
+        if (!videoIds.length) return;
+        if (i !== gIdx) stopSlide(gIdx);
+        gIdx = (i + videoIds.length) % videoIds.length;
+        updateGalleryPosition();
+    }
+    function updateGalleryPosition() {
+        track.style.transform = "translateX(" + (-100 * gIdx) + "%)";
+        Array.from(dotsEl.children).forEach((d, i) => d.classList.toggle("active", i === gIdx));
+    }
+    document.getElementById("galleryPrev").addEventListener("click", () => galleryGoTo(gIdx - 1));
+    document.getElementById("galleryNext").addEventListener("click", () => galleryGoTo(gIdx + 1));
+
+    function clearGallery() {
+        track.innerHTML = "";
+        dotsEl.innerHTML = "";
+        videoIds = [];
+        gallery.classList.add("empty");
+    }
+
+    // ── LIGHTBOX ──
+    const lightbox = document.getElementById("lightbox");
+    const lightboxFrame = document.getElementById("lightboxFrame");
+
+    function openLightbox() {
+        const id = videoIds[gIdx];
+        if (!id) return;
+        stopSlide(gIdx);
+        lightboxFrame.innerHTML = '<iframe src="' + playerUrl(id, true) + '" title="Video" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>';
+        lightbox.classList.add("open");
+    }
+    function closeLightbox() {
+        lightbox.classList.remove("open");
+        lightboxFrame.innerHTML = "";
+    }
+    document.getElementById("enlargeBtn").addEventListener("click", openLightbox);
+    document.getElementById("lightbox-close").addEventListener("click", closeLightbox);
+    lightbox.addEventListener("click", e => { if (e.target === lightbox) closeLightbox(); });
+
+    // ── PANEL ──
+    function showSidePanel(idx) {
+        const a = allPoints[idx].attributes;
+        document.getElementById("locationName").textContent = a.titolo_en || "Delta Works";
+        document.getElementById("locationDescription").textContent = String(a.testo_en || "").trim();
+        document.getElementById("counterText").textContent = (idx + 1) + " / " + allPoints.length;
+
+        const urls = linksOf(a);
+        const links = document.getElementById("locationLinks");
+        links.innerHTML = "";
+        urls.forEach((u, i) => {
+            const el = document.createElement("a");
+            el.href = u; el.target = "_blank"; el.rel = "noopener";
+            el.textContent = (urls.length > 1 ? "Video " + (i + 1) : "Video") + " on Vimeo ↗";
+            links.appendChild(el);
+        });
+        initGallery(urls);
+        document.querySelector(".panel-body").scrollTop = 0;
+        panel.classList.add("visible");
+    }
+
+    function showPointTooltip(f) {
+        tooltipLayer.removeAll();
+        tooltipLayer.add(new Graphic({
+            geometry: f.geometry,
+            symbol: {
+                type: "simple-marker",
+                color: [212, 98, 42, 0.25],
+                size: 28,
+                outline: { color: [212, 98, 42, 0.9], width: 3 }
+            }
+        }));
+        tooltipLayer.add(new Graphic({
+            geometry: f.geometry,
+            symbol: {
+                type: "text", color: "#1B3A2D", text: f.attributes.titolo_en || "",
+                font: { size: 11, weight: "bold", family: "Source Sans 3, sans-serif" },
+                haloColor: "white", haloSize: 2, yoffset: -25
+            }
+        }));
+    }
+
+    // ── ROUTE (to show the stretch between two stops) ──
+    const route = { V: [], cum: [], total: 0, loop: false, ok: false };
+
+    function buildRoute(geom) {
+        const V = [];
+        geom.paths.forEach(p => p.forEach(c => V.push([c[0], c[1]])));
+        const cum = [0];
+        for (let i = 1; i < V.length; i++) {
+            cum.push(cum[i - 1] + Math.hypot(V[i][0] - V[i - 1][0], V[i][1] - V[i - 1][1]));
+        }
+        route.V = V;
+        route.cum = cum;
+        route.total = cum[cum.length - 1];
+        route.loop = V.length > 1 &&
+            Math.hypot(V[0][0] - V[V.length - 1][0], V[0][1] - V[V.length - 1][1]) < 200;
+        route.ok = V.length > 1;
+    }
+
+    function nearestVertex(x, y) {
+        let best = 0, bd = Infinity;
+        const V = route.V;
+        for (let i = 0; i < V.length; i++) {
+            const dx = V[i][0] - x, dy = V[i][1] - y, d = dx * dx + dy * dy;
+            if (d < bd) { bd = d; best = i; }
+        }
+        return { index: best, dist: Math.sqrt(bd) };
+    }
+
+    // Vertices of the route from index ia to index ib, taking the shorter way round the loop
+    function pathBetween(ia, ib) {
+        const n = route.V.length, cum = route.cum;
+        let forward;
+        if (route.loop) {
+            const fwdLen = ib >= ia ? cum[ib] - cum[ia] : route.total - cum[ia] + cum[ib];
+            forward = fwdLen <= route.total - fwdLen;
+        } else {
+            forward = ib >= ia;
+        }
+        const out = [route.V[ia]];
+        let i = ia, guard = 0;
+        while (i !== ib && guard++ < n + 2) {
+            i += forward ? 1 : -1;
+            if (i >= n) i = 0;
+            if (i < 0) i = n - 1;
+            out.push(route.V[i]);
+        }
+        return out;
+    }
+
+    // Extent of the stretch of route between stop "from" and stop "to",
+    // or null when they are so close that zooming out would only look jumpy
+    function routeExtent(from, to) {
+        if (!route.ok || from.vi == null || to.vi == null || from.vi === to.vi) return null;
+        const p = pathBetween(from.vi, to.vi);
+        let xmin = Infinity, ymin = Infinity, xmax = -Infinity, ymax = -Infinity;
+        p.forEach(v => {
+            if (v[0] < xmin) xmin = v[0];
+            if (v[0] > xmax) xmax = v[0];
+            if (v[1] < ymin) ymin = v[1];
+            if (v[1] > ymax) ymax = v[1];
+        });
+        const padX = Math.max((xmax - xmin) * 0.2, 1500);
+        const padY = Math.max((ymax - ymin) * 0.2, 1500);
+        xmin -= padX; xmax += padX; ymin -= padY; ymax += padY;
+
+        const pad = view.padding || {};
+        const w = view.width - (pad.left || 0) - (pad.right || 0);
+        const h = view.height - (pad.top || 0) - (pad.bottom || 0);
+        const res = Math.max((xmax - xmin) / w, (ymax - ymin) / h);
+        const scaleNeeded = res * 96 / 0.0254;
+        if (scaleNeeded <= SCALE_STOP * 1.3) return null;
+
+        return new Extent({ xmin, ymin, xmax, ymax, spatialReference: view.spatialReference });
+    }
+
+    // ── MOVEMENT ──
+    // From one stop to the next: a short zoom out on the stretch of route between them, then a zoom in.
+    // From the whole map (or after a click on a far point): a single smooth zoom.
+    function moveTo(from, to) {
+        const id = ++moveId;
+        const toStop = d => view.goTo({ target: to.geometry, scale: SCALE_STOP }, { duration: d, easing: "ease-in-out" });
+
+        const ext = from ? routeExtent(from, to) : null;
+        if (!ext) {
+            toStop(1600).catch(noop);
+            return;
+        }
+        view.goTo(ext, { duration: 1400, easing: "ease-in-out" })
+            .then(() => new Promise(r => setTimeout(r, 500)))
+            .then(() => { if (id === moveId) return toStop(1400); })
+            .catch(noop);
+    }
+
+    function selectPoint(idx) {
+        if (!allPoints.length) return;
+        const prev = (started && currentIdx >= 0) ? allPoints[currentIdx] : null;
+        started = true;
+        startBtn.classList.remove("on");
+        currentIdx = (idx + allPoints.length) % allPoints.length;
+        const f = allPoints[currentIdx];
+
+        showSidePanel(currentIdx);
+        showPointTooltip(f);
+        updateMapPadding();
+        moveTo(prev, f);
+    }
+
+    function closePanel() {
+        moveId++;
+        started = false;
+        currentIdx = -1;
+        panel.classList.remove("visible");
+        clearGallery();
+        closeLightbox();
+        tooltipLayer.removeAll();
+        updateMapPadding();
+        startBtn.classList.add("on");
+        // Back to the whole map
+        view.goTo(HOME, { duration: 1200, easing: "ease-in-out" }).catch(noop);
+    }
+
+    function navigatePrevious() { selectPoint(currentIdx <= 0 ? allPoints.length - 1 : currentIdx - 1); }
+    function navigateNext() { selectPoint(currentIdx < 0 ? 0 : currentIdx + 1); }
+
+    startBtn.addEventListener("click", () => selectPoint(0));
+    document.getElementById("prevBtn").addEventListener("click", navigatePrevious);
+    document.getElementById("nextBtn").addEventListener("click", navigateNext);
+    document.getElementById("closeBtn").addEventListener("click", closePanel);
+    document.addEventListener("keydown", e => {
+        if (e.key === "Escape") { closeLightbox(); return; }
+        if (lightbox.classList.contains("open")) return;
+        if (e.key === "ArrowLeft") navigatePrevious();
+        if (e.key === "ArrowRight") navigateNext();
+    });
+
+    // Click on a map point; click elsewhere closes the panel
+    view.on("click", e => {
+        view.hitTest(e, { include: [pointsLayer] }).then(r => {
+            const hit = r.results.find(x => x.graphic && x.graphic.layer === pointsLayer);
+            if (!hit) { if (started) closePanel(); return; }
+            const idx = allPoints.findIndex(f => f.attributes.node === hit.graphic.attributes.node);
+            if (idx !== -1 && idx !== currentIdx) selectPoint(idx);
+        });
+    });
+
+    // Pointer cursor on hover
+    view.on("pointer-move", e => {
+        view.hitTest(e, { include: [pointsLayer] }).then(r => {
+            view.container.style.cursor = r.results.length ? "pointer" : "";
+        });
+    });
+
+    // ── SCALE BAR ──
+    const scaleEl = document.getElementById("scalebar");
+    let scaleKey = "";
+
+    // Largest "nice" length (1, 2 or 5 x power of ten) that is not longer than maxMeters
+    function niceLength(maxMeters) {
+        const base = Math.pow(10, Math.floor(Math.log(maxMeters) / Math.LN10));
+        const f = maxMeters / base;
+        return (f >= 5 ? 5 : f >= 2 ? 2 : 1) * base;
+    }
+    const num = v => String(parseFloat(v.toFixed(2)));
+
+    function updateScale() {
+        if (!view.center || !view.resolution) return;
+        let mpp = view.resolution;
+        if (view.spatialReference && view.spatialReference.isWebMercator) {
+            // Web Mercator units are stretched at this latitude: correct them to ground metres
+            mpp = mpp * Math.cos(Math.atan(Math.sinh(view.center.y / 6378137)));
+        }
+        const total = niceLength(170 * mpp);
+        const px = total / mpp;
+        const lead = Math.round(total / Math.pow(10, Math.floor(Math.log(total) / Math.LN10)));
+        const seg = lead === 5 ? 5 : 4;
+        const km = total >= 1000, div = km ? 1000 : 1;
+
+        const key = total + "|" + Math.round(px);
+        if (key === scaleKey) return;
+        scaleKey = key;
+
+        const x0 = 4, y = 16, W = Math.ceil(px) + 44, H = 32;
+        let s = '<line x1="' + x0 + '" y1="' + y + '" x2="' + (x0 + px) + '" y2="' + y + '" stroke="#000" stroke-width="2"/>';
+        for (let i = 0; i <= seg; i++) {
+            const x = x0 + px * i / seg, h = (i === 0 || i === seg) ? 10 : 6;
+            s += '<line x1="' + x + '" y1="' + (y - h) + '" x2="' + x + '" y2="' + y + '" stroke="#000" stroke-width="2"/>';
+        }
+        s += '<text x="' + x0 + '" y="' + (y + 14) + '" text-anchor="middle">0</text>';
+        if (seg === 4) s += '<text x="' + (x0 + px / 2) + '" y="' + (y + 14) + '" text-anchor="middle">' + num(total / 2 / div) + '</text>';
+        s += '<text x="' + (x0 + px) + '" y="' + (y + 14) + '" text-anchor="middle">' + num(total / div) + (km ? " km" : " m") + '</text>';
+        scaleEl.innerHTML = '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '">' + s + '</svg>';
+    }
+    view.watch("scale", updateScale);
+
+    // ── LOAD ──
+    view.when(() => {
+        const loader = document.getElementById("loading");
+        loader.classList.add("hidden");
+        setTimeout(() => loader.style.display = "none", 700);
+
+        view.ui.move("zoom", "top-right");
+        view.ui.add(scaleEl, "bottom-left");
+        updateScale();
+
+        const qp = pointsLayer.createQuery();
+        qp.where = "mappa = 'Solution'";
+        qp.outFields = ["*"];
+        qp.returnGeometry = true;
+        qp.outSpatialReference = view.spatialReference;
+
+        const qr = routeLayer.createQuery();
+        qr.where = "1=1";
+        qr.outFields = [];
+        qr.returnGeometry = true;
+        qr.outSpatialReference = view.spatialReference;
+
+        return Promise.all([
+            pointsLayer.queryFeatures(qp),
+            routeLayer.queryFeatures(qr).catch(() => null)
+        ]);
+    }).then(res => {
+        const feats = res[0].features.slice();
+        const rf = res[1] && res[1].features && res[1].features[0];
+        if (rf && rf.geometry && rf.geometry.paths) buildRoute(rf.geometry);
+
+        if (route.ok) {
+            // Stops are ordered as they appear along the route
+            feats.forEach(f => { f.vi = nearestVertex(f.geometry.x, f.geometry.y).index; });
+            feats.sort((a, b) => a.vi - b.vi);
+        } else {
+            feats.sort((a, b) => {
+                const ia = ORDER_FALLBACK.indexOf(a.attributes.node), ib = ORDER_FALLBACK.indexOf(b.attributes.node);
+                return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+            });
+        }
+        allPoints = feats;
+
+        // The map opens on the whole delta, with the button to start
+        startBtn.classList.add("on");
+    }).catch(err => {
+        console.error(err);
+        document.getElementById("loading").classList.add("hidden");
+    });
+
+    window.addEventListener("resize", updateMapPadding);
+});
+</script>
+</body>
+</html>
