@@ -842,7 +842,7 @@ require([
         loader.classList.add("hidden");
         setTimeout(() => loader.style.display = "none", 700);
 
-        view.ui.move("zoom", "top-right");
+        view.ui.move("zoom", "top-left");
         if (useEsri) {
             const labelsBtn = document.getElementById("labelsBtn");
             labelsBtn.style.display = "flex";
@@ -852,7 +852,7 @@ require([
                 labelsBtn.setAttribute("aria-pressed", String(labelsOn));
                 labelsBtn.title = labelsOn ? "Hide labels" : "Show labels";
             });
-            view.ui.add(labelsBtn, "top-right");
+            view.ui.add(labelsBtn, "top-left");   // under the zoom buttons
         }
 
         const qp = pointsLayer.createQuery();
