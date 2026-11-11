@@ -193,6 +193,20 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--route); outline
 .stop-nav.on { opacity: 1; pointer-events: auto; }
 .stop-nav svg { width: 13px; height: 13px; }
 
+/* "Start the route" button inside the panel, and no close button while the introduction is shown */
+.tour-btn {
+    margin-top: 6px;
+    padding: 12px 22px;
+    background: var(--ink); color: var(--paper);
+    border: 0; border-radius: 2px;
+    font-size: 16px; font-weight: 500;
+    cursor: pointer;
+    align-self: flex-start;
+    transition: background 0.15s ease;
+}
+.tour-btn:hover { background: var(--route); }
+.side-panel.intro .panel-close { display: none; }
+
 /* ── LIGHTBOX ── */
 #lightbox {
     position: fixed; inset: 0;
@@ -351,6 +365,11 @@ require([
                     "title": "Drowned villages of South Beveland",
                     "text": "Zeeland has about 120 drowned villages. From the north coast of South Beveland you look over the Verdronken Land, a salt marsh and mudflat where villages such as Schoudee, Nieuwlande and Tolsende once stood, together with the city of Reimerswaal. Their remains lie under the mud. The Delta Works were built so that Zeeland would not lose more land."
             }
+    };
+    // Introduction shown in the side panel until the tour starts
+    const INTRO = {
+        title: "The Delta Works",
+        text: "The flood of 1953 changed how the Netherlands defends its coast. In the following decades dams, sluices and storm surge barriers closed most of the sea inlets of the south-western delta: 13 works, completed in 1997. They shorten the coastline and keep the sea out of the low land. The Oosterschelde is the exception, with a barrier that stays open and closes only during storms. The stops show how the works fit together."
     };
     // Used only if the route cannot be loaded: order of the stops along the route
     const ORDER_FALLBACK = [70, 4, 35, 99, 76, 72, 90, 88];
@@ -523,6 +542,7 @@ require([
 
     const panel    = document.getElementById("sidePanel");
     const startBtn = document.getElementById("startBtn");
+    startBtn.style.display = "none";   // the start button now lives in the side panel
 
     // ── MAP PADDING — keeps the point centred in the part of the map not covered by the panel ──
     function updateMapPadding() {
@@ -554,7 +574,7 @@ require([
     // and 12 px from the side panel. The panel width is read directly, so the position stays right
     // even when the browser zoom changes.
     function placeStopNav() {
-        const show = arrowsOn && currentIdx >= 0;
+        const show = arrowsOn;
         if (show) {
             const panelW = panel.classList.contains("visible") ? panel.offsetWidth : 0;
             prevEl.style.left = "12px";
@@ -626,7 +646,10 @@ require([
         document.getElementById("locationName").textContent = (ed && ed.title) || a.titolo_en || "Delta Works";
         document.getElementById("locationDescription").textContent = ((ed && ed.text) || String(a.testo_en || "")).trim();
         document.getElementById("counterText").textContent = "Stop " + (idx + 1) + " of " + allPoints.length;
-        document.getElementById("nodePlate").textContent = a.node != null ? a.node : idx + 1;
+        const plate = document.getElementById("nodePlate");
+        plate.textContent = a.node != null ? a.node : idx + 1;
+        plate.style.display = "";
+        panel.classList.remove("intro");
 
         const urls = linksOf(a);
         const links = document.getElementById("locationLinks");
@@ -839,18 +862,37 @@ require([
         moveTo(prev, f);
     }
 
+    // The side panel is always visible. Before the tour (and after it) it shows the introduction.
+    function showIntro() {
+        currentIdx = -1;
+        clearHighlight();
+        clearGallery();
+        closeLightbox();
+        const plate = document.getElementById("nodePlate");
+        plate.textContent = "";
+        plate.style.display = "none";
+        document.getElementById("locationName").textContent = INTRO.title;
+        document.getElementById("locationDescription").textContent = INTRO.text;
+        document.getElementById("counterText").textContent = allPoints.length + " stops";
+        const links = document.getElementById("locationLinks");
+        links.innerHTML = "";
+        const btn = document.createElement("button");
+        btn.className = "tour-btn";
+        btn.textContent = "Start the route";
+        btn.addEventListener("click", () => selectPoint(0));
+        links.appendChild(btn);
+        document.querySelector(".panel-body").scrollTop = 0;
+        panel.classList.add("intro");
+        panel.classList.add("visible");
+        updateMapPadding();
+        setArrows(true);
+    }
+
+    // Back to the introduction and to the opening view of the map
     function closePanel() {
         moveId++;
         started = false;
-        currentIdx = -1;
-        panel.classList.remove("visible");
-        clearGallery();
-        closeLightbox();
-        clearHighlight();
-        setArrows(false);
-        updateMapPadding();
-        startBtn.classList.add("on");
-        // Back to the whole map
+        showIntro();
         fitHome(true).catch(noop);
     }
 
@@ -903,6 +945,8 @@ require([
 
     // ── LOAD ──
     view.when(() => {
+        panel.classList.add("visible");
+        updateMapPadding();
         fitHome(false).catch(noop);
         const loader = document.getElementById("loading");
         loader.classList.add("hidden");
@@ -956,7 +1000,7 @@ require([
         placeLabels();
 
         // The map opens on the whole delta, with the button to start
-        startBtn.classList.add("on");
+        showIntro();
     }).catch(err => {
         console.error(err);
         document.getElementById("loading").classList.add("hidden");
