@@ -8,56 +8,50 @@
     <script src="https://js.arcgis.com/4.27/"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Source+Sans+3:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600&display=swap" rel="stylesheet">
     <style>
+/* Design: colours come from the map itself (white paper, black ink, the red of the route).
+   One type family (Barlow, a grotesk drawn from road signage) in two widths.
+   The one distinctive element is the stop number shown as a route plate. */
 :root {
-    --color-forest:         #1B3A2D;
-    --color-forest-light:   #2C5F41;
-    --color-sage:           #7A9E7E;
-    --color-sage-light:     #B5CDB6;
-    --color-sand:           #F4EDE4;
-    --color-sand-dark:      #E8DFD3;
-    --color-water-light:    #F0C4A8;
-    --color-accent:         #C85A3A;
-    --color-text:           #2D2A26;
-    --color-text-secondary: #6B6560;
-    --color-white:          #FEFDFB;
-    --font-display:         'DM Serif Display', Georgia, serif;
-    --font-body:            'Source Sans 3', -apple-system, sans-serif;
-    --panel-width:          420px;
-    --radius-sm:            6px;
-    --radius-md:            12px;
-    --shadow-md:            0 4px 16px rgba(27,58,45,0.12);
-    --shadow-lg:            0 8px 32px rgba(27,58,45,0.16);
-    --transition-fast:      0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    --transition-smooth:    0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    --paper:   #FFFFFF;
+    --ink:     #000000;
+    --ink-2:   #6B6B6B;
+    --line:    #D9D9D9;
+    --route:   #D7263D;
+    --font:        'Barlow', 'Helvetica Neue', Arial, sans-serif;
+    --font-narrow: 'Barlow Semi Condensed', 'Barlow', 'Arial Narrow', sans-serif;
+    --panel-width: 420px;
 }
 
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 html, body {
     height: 100%; height: 100dvh;
     overflow: hidden;
-    font-family: var(--font-body);
-    background: var(--color-sand);
-    color: var(--color-text);
+    font-family: var(--font);
+    background: var(--paper);
+    color: var(--ink);
     -webkit-font-smoothing: antialiased;
 }
 
 #viewDiv { position: fixed; inset: 0; background: #F6F1EC; }
 
+button { font-family: inherit; color: inherit; }
+button:focus-visible, a:focus-visible { outline: 2px solid var(--route); outline-offset: 2px; }
+
 /* ── LOADING ── */
 #loading {
     position: fixed; inset: 0;
-    background: var(--color-sand);
+    background: var(--paper);
     display: flex; align-items: center; justify-content: center;
     z-index: 10000;
-    transition: opacity 0.6s ease;
+    transition: opacity 0.5s ease;
 }
 #loading.hidden { opacity: 0; pointer-events: none; }
 .loading-spinner {
-    width: 40px; height: 40px;
-    border: 3px solid var(--color-sand-dark);
-    border-top-color: var(--color-forest);
+    width: 28px; height: 28px;
+    border: 2px solid var(--line);
+    border-top-color: var(--ink);
     border-radius: 50%;
     animation: spin 0.9s linear infinite;
 }
@@ -65,286 +59,180 @@ html, body {
 
 .esri-popup { display: none !important; }
 
-/* ── START BUTTON (whole map on screen) ── */
+/* ── START ── */
 #startBtn {
     position: fixed;
-    left: 50%; bottom: 40px;
-    transform: translateX(-50%);
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
     z-index: 900;
-    display: flex; align-items: center; gap: 10px;
-    padding: 10px 18px 10px 12px;
-    background: var(--color-white);
-    border: 1px solid var(--color-sand-dark);
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-md);
-    font-family: var(--font-body);
-    font-size: 14px; font-weight: 600;
-    color: var(--color-forest);
+    padding: 12px 22px;
+    background: var(--ink);
+    color: var(--paper);
+    border: 0;
+    border-radius: 2px;
+    font-size: 16px; font-weight: 500;
     cursor: pointer;
     opacity: 0; pointer-events: none;
-    transition: opacity var(--transition-smooth), background var(--transition-fast);
+    transition: opacity 0.3s ease, background 0.15s ease;
 }
 #startBtn.on { opacity: 1; pointer-events: auto; }
-#startBtn:hover { background: var(--color-sand); }
-#startBtn .start-icon {
-    width: 30px; height: 30px;
-    background: var(--color-forest);
-    border-radius: var(--radius-sm);
-    display: flex; align-items: center; justify-content: center;
-}
-#startBtn .start-icon svg { width: 15px; height: 15px; color: var(--color-sage); }
+#startBtn:hover { background: var(--route); }
 
-/* ── SIDE PANEL (RIGHT), same layout as the Drava map ── */
+/* ── SIDE PANEL (right) ── */
 .side-panel {
     position: fixed;
     top: 0; right: 0; bottom: 0;
     width: var(--panel-width);
-    background: var(--color-white);
-    box-shadow: var(--shadow-lg);
+    background: var(--paper);
+    border-left: 1px solid var(--line);
     display: flex;
     flex-direction: column;
     z-index: 950;
     overflow: hidden;
     transform: translateX(100%);
-    transition: transform var(--transition-smooth);
+    transition: transform 0.35s ease;
 }
 .side-panel.visible { transform: translateX(0); }
 
-.panel-close {
-    position: absolute;
-    top: 16px; right: 16px;
-    width: 36px; height: 36px;
-    background: rgba(27,58,45,0.7);
-    backdrop-filter: blur(8px);
-    color: var(--color-white);
-    border: none;
-    border-radius: 50%;
-    cursor: pointer;
-    font-size: 18px;
-    display: flex; align-items: center; justify-content: center;
-    transition: var(--transition-fast);
-    z-index: 5;
-}
-.panel-close:hover { background: var(--color-forest); transform: scale(1.08); }
-
-/* Video gallery (in place of the photo gallery) */
+/* Video at the top, full width */
 .panel-gallery {
     position: relative;
     aspect-ratio: 16 / 9;
-    background: var(--color-sand-dark);
+    background: #E6E6E6;
     overflow: hidden;
     flex-shrink: 0;
 }
 .panel-gallery.empty { display: none; }
-.gallery-track {
-    display: flex;
-    height: 100%;
-    transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.gallery-slide { min-width: 100%; height: 100%; }
+.gallery-track { height: 100%; }
+.gallery-slide { height: 100%; }
 .gallery-slide iframe { width: 100%; height: 100%; border: 0; display: block; }
 
-.gallery-dots {
-    position: absolute;
-    bottom: 12px; left: 50%;
-    transform: translateX(-50%);
-    display: flex; gap: 8px;
-    z-index: 3;
-}
-.gallery-dot {
-    width: 8px; height: 8px;
-    border-radius: 50%;
-    background: rgba(255,255,255,0.5);
-    border: none; padding: 0;
+.sq-btn {
+    width: 32px; height: 32px;
+    background: var(--paper);
+    border: 1px solid var(--ink);
+    border-radius: 0;
     cursor: pointer;
-    transition: var(--transition-fast);
-}
-.gallery-dot.active { background: var(--color-white); transform: scale(1.3); }
-
-.gallery-nav {
-    position: absolute;
-    top: 50%; transform: translateY(-50%);
-    width: 36px; height: 36px;
-    background: rgba(27,58,45,0.5);
-    backdrop-filter: blur(4px);
-    color: white;
-    border: none; border-radius: 50%;
-    cursor: pointer;
-    font-size: 16px;
     display: flex; align-items: center; justify-content: center;
-    transition: var(--transition-fast);
-    z-index: 3;
+    transition: background 0.15s ease, color 0.15s ease;
 }
-.gallery-nav:hover { background: rgba(27,58,45,0.8); }
-.gallery-nav.prev { left: 12px; }
-.gallery-nav.next { right: 12px; }
-.panel-gallery.single .gallery-nav,
-.panel-gallery.single .gallery-dots { display: none; }
+.sq-btn:hover { background: var(--ink); color: var(--paper); }
+.sq-btn svg { width: 15px; height: 15px; }
 
-/* Enlarge button (same hint as the Drava photos) */
-.gallery-enlarge {
-    position: absolute;
-    top: 16px; left: 16px;
-    height: 32px;
-    padding: 0 10px;
-    background: rgba(27,58,45,0.7);
-    backdrop-filter: blur(8px);
-    color: white;
-    border: none; border-radius: 16px;
-    cursor: pointer;
-    display: flex; align-items: center; gap: 6px;
-    font-family: var(--font-body); font-size: 12px; font-weight: 600;
-    transition: var(--transition-fast);
-    z-index: 4;
+.gallery-enlarge { position: absolute; top: 10px; left: 10px; z-index: 4; }
+
+/* Heading: route plate + name + close */
+.panel-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 20px 20px 0;
 }
-.gallery-enlarge:hover { background: var(--color-forest); }
-.gallery-enlarge svg { width: 13px; height: 13px; }
+#nodePlate {
+    flex-shrink: 0;
+    min-width: 48px; height: 40px;
+    padding: 0 8px;
+    background: var(--route);
+    color: var(--paper);
+    border-radius: 4px;
+    font-family: var(--font-narrow);
+    font-size: 26px; font-weight: 600;
+    line-height: 40px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+.panel-title { flex: 1; min-width: 0; }
+.counter-text { display: block; margin-top: 4px; font-size: 14px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+#locationName {
+    font-family: var(--font-narrow);
+    font-size: 24px;
+    font-weight: 600;
+    line-height: 1.15;
+    color: var(--ink);
+    padding-top: 2px;
+}
+.panel-close { flex-shrink: 0; }
 
-/* Panel content */
+/* Text */
 .panel-body {
     flex: 1;
     overflow-y: auto;
-    padding: 24px;
+    padding: 16px 20px 20px;
     scrollbar-width: thin;
-    scrollbar-color: var(--color-sand-dark) transparent;
+    scrollbar-color: var(--line) transparent;
 }
-.panel-body::-webkit-scrollbar { width: 5px; }
-.panel-body::-webkit-scrollbar-track { background: transparent; }
-.panel-body::-webkit-scrollbar-thumb { background: var(--color-sand-dark); border-radius: 3px; }
-
-.type-badge {
-    display: inline-block;
-    padding: 4px 12px;
-    border-radius: 20px;
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    margin-bottom: 12px;
-    background: #E3F2FD; color: #1565C0;
-}
-
-#locationName {
-    font-family: var(--font-display);
-    font-size: 24px;
-    font-weight: 400;
-    color: var(--color-forest);
-    line-height: 1.3;
-    margin-bottom: 16px;
-}
-
-.panel-divider {
-    width: 40px; height: 2px;
-    background: var(--color-sage-light);
-    margin-bottom: 16px;
-    border-radius: 1px;
-}
-
 #locationDescription {
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 400;
-    line-height: 1.8;
-    color: var(--color-text-secondary);
+    line-height: 1.55;
+    color: var(--ink);
     white-space: pre-line;
+    max-width: 62ch;
 }
-
 #locationLinks { margin-top: 14px; display: flex; flex-direction: column; gap: 4px; }
 #locationLinks a {
-    font-size: 12px; font-weight: 600;
-    color: var(--color-forest-light);
-    text-decoration: none;
+    font-size: 15px; font-weight: 500;
+    color: var(--ink);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-thickness: 1px;
 }
-#locationLinks a:hover { text-decoration: underline; }
+#locationLinks a:hover { color: var(--route); }
 
-.panel-counter {
-    padding: 16px 24px;
-    border-top: 1px solid var(--color-sand-dark);
-    display: flex; align-items: center; justify-content: space-between;
-    background: var(--color-white);
-    flex-shrink: 0;
+/* Previous / next stop: floating on the map, either side of the selected point */
+.stop-nav {
+    position: fixed;
+    z-index: 800;
+    width: 30px; height: 30px;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.2s ease, background 0.15s ease, color 0.15s ease;
 }
-.counter-text {
-    font-size: 11px; font-weight: 500;
-    color: var(--color-text-secondary);
-    letter-spacing: 0.04em;
-}
-.panel-nav-btns { display: flex; gap: 6px; }
-.panel-nav-btn {
-    width: 36px; height: 36px;
-    border: 1px solid var(--color-sand-dark);
-    background: var(--color-white);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    transition: var(--transition-fast);
-    color: var(--color-text);
-}
-.panel-nav-btn:hover { background: var(--color-sand); border-color: var(--color-sage-light); }
-.panel-nav-btn svg { width: 16px; height: 16px; }
+.stop-nav.on { opacity: 1; pointer-events: auto; }
+.stop-nav svg { width: 13px; height: 13px; }
 
-/* ── LIGHTBOX for the video (same look as the Drava photo lightbox) ── */
+/* ── LIGHTBOX ── */
 #lightbox {
     position: fixed; inset: 0;
-    background: rgba(15,30,20,0.88);
-    backdrop-filter: blur(6px);
+    background: rgba(0,0,0,0.88);
     z-index: 9000;
     display: flex; align-items: center; justify-content: center;
     opacity: 0; pointer-events: none;
-    transition: opacity 0.3s ease;
+    transition: opacity 0.25s ease;
 }
 #lightbox.open { opacity: 1; pointer-events: auto; }
 .lightbox-frame {
     width: min(88vw, calc(88vh * 16 / 9));
     aspect-ratio: 16 / 9;
-    border-radius: var(--radius-md);
-    overflow: hidden;
-    box-shadow: 0 8px 40px rgba(0,0,0,0.5);
-    background: #000;
-    transform: scale(0.95);
-    transition: transform 0.3s ease;
+    background: var(--ink);
 }
-#lightbox.open .lightbox-frame { transform: scale(1); }
 .lightbox-frame iframe { width: 100%; height: 100%; border: 0; display: block; }
-#lightbox-close {
-    position: absolute; top: 18px; right: 18px;
-    width: 36px; height: 36px;
-    background: rgba(255,255,255,0.12);
-    border: 1px solid rgba(255,255,255,0.2);
-    border-radius: 50%;
-    color: white; cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    transition: background 0.2s;
-}
-#lightbox-close:hover { background: rgba(255,255,255,0.22); }
-#lightbox-close svg { width: 16px; height: 16px; }
+#lightbox-close { position: absolute; top: 16px; right: 16px; }
 
-/* ── SCALE BAR: plain black line with ticks on top (in the ArcGIS UI, bottom-left) ── */
-.scalebar {
-    background: rgba(254,253,251,0.88);
-    border-radius: var(--radius-sm);
-    padding: 4px 6px 0;
-    line-height: 0;
-    pointer-events: none;
-}
-.scalebar svg { display: block; overflow: visible; }
-.scalebar text { font-family: var(--font-body); font-size: 11px; font-weight: 600; fill: #000; }
+/* Labels button */
+.labels-btn { width: 26px; height: 26px; margin-top: 2px; font-size: 12px; font-weight: 600; }
+.sq-btn[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
 
 /* ArcGIS overrides */
 .esri-ui-corner { margin: 12px; }
-.esri-widget--button { border-radius: var(--radius-sm) !important; }
+.esri-widget--button { border-radius: 0 !important; }
+.esri-zoom .esri-widget--button { width: 26px; height: 26px; font-size: 12px; }
 
-/* ── RESPONSIVE (same breakpoints as the Drava map) ── */
+/* ── RESPONSIVE ── */
 @media (max-width: 1024px) {
     :root { --panel-width: 360px; }
 }
 @media (max-width: 768px) {
-    .side-panel { width: 300px; max-width: 80vw; }
-    .panel-body { padding: 16px; }
-    #locationName { font-size: 20px; margin-bottom: 12px; }
-    #locationDescription { font-size: 13px; line-height: 1.7; }
-    .panel-close { top: 12px; right: 12px; width: 32px; height: 32px; font-size: 16px; }
-    .panel-counter { padding: 12px 16px; }
-    #startBtn { bottom: 32px; }
+    .side-panel { width: 300px; max-width: 62vw; }
+    .panel-head { padding: 14px 14px 0; gap: 10px; }
+    #nodePlate { min-width: 40px; height: 34px; line-height: 34px; font-size: 22px; }
+    #locationName { font-size: 20px; }
+    .panel-body { padding: 12px 14px 14px; }
+    #locationDescription { font-size: 15px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition: none !important; animation-duration: 0.01ms !important; }
 }
     </style>
 </head>
@@ -353,106 +241,158 @@ html, body {
 <div id="loading"><div class="loading-spinner"></div></div>
 <div id="viewDiv"></div>
 
-<!-- Start button -->
-<button id="startBtn">
-    <span class="start-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
-    </span>
-    Explore the Delta Works
-</button>
+<button id="startBtn">Start the route</button>
 
-<!-- Detail panel — RIGHT -->
+<!-- Detail panel — right -->
 <aside class="side-panel" id="sidePanel">
-    <button class="panel-close" id="closeBtn" aria-label="Close">×</button>
 
-    <!-- Video gallery -->
-    <div class="panel-gallery single empty" id="panelGallery">
+    <!-- Video -->
+    <div class="panel-gallery empty" id="panelGallery">
         <div class="gallery-track" id="galleryTrack"></div>
-        <button class="gallery-enlarge" id="enlargeBtn" aria-label="Enlarge video">
+        <button class="sq-btn gallery-enlarge" id="enlargeBtn" aria-label="Enlarge video" title="Enlarge video">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
-            Enlarge
         </button>
-        <button class="gallery-nav prev" id="galleryPrev" aria-label="Previous video">‹</button>
-        <button class="gallery-nav next" id="galleryNext" aria-label="Next video">›</button>
-        <div class="gallery-dots" id="galleryDots"></div>
     </div>
 
-    <!-- Content -->
+    <!-- Route plate, name, close -->
+    <div class="panel-head">
+        <span id="nodePlate"></span>
+        <div class="panel-title">
+            <h2 id="locationName"></h2>
+            <span class="counter-text" id="counterText"></span>
+        </div>
+        <button class="sq-btn panel-close" id="closeBtn" aria-label="Close" title="Close">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+    </div>
+
+    <!-- Text -->
     <div class="panel-body">
-        <span class="type-badge">Delta Works</span>
-        <h2 id="locationName"></h2>
-        <div class="panel-divider"></div>
         <p id="locationDescription"></p>
         <div id="locationLinks"></div>
     </div>
 
-    <!-- Counter & nav -->
-    <div class="panel-counter">
-        <span class="counter-text" id="counterText"></span>
-        <div class="panel-nav-btns">
-            <button class="panel-nav-btn" id="prevBtn" aria-label="Previous">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
-            </button>
-            <button class="panel-nav-btn" id="nextBtn" aria-label="Next">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
-            </button>
-        </div>
-    </div>
 </aside>
+
+<!-- Labels on / off (moved into the ArcGIS UI, under the zoom buttons) -->
+<button class="sq-btn labels-btn" id="labelsBtn" aria-pressed="false" title="Show labels" style="display:none">Aa</button>
+
+<!-- Previous / next stop, floating on the map -->
+<button class="sq-btn stop-nav" id="prevBtn" aria-label="Previous stop" title="Previous stop">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+</button>
+<button class="sq-btn stop-nav" id="nextBtn" aria-label="Next stop" title="Next stop">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+</button>
 
 <!-- Video lightbox -->
 <div id="lightbox">
-    <button id="lightbox-close" aria-label="Close">
+    <button class="sq-btn" id="lightbox-close" aria-label="Close video">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
     </button>
     <div class="lightbox-frame" id="lightboxFrame"></div>
 </div>
 
-<!-- Scale bar content (moved into the ArcGIS UI) -->
-<div class="scalebar" id="scalebar"></div>
-
 <script>
 require([
     "esri/Map", "esri/views/MapView", "esri/layers/FeatureLayer", "esri/layers/GraphicsLayer",
-    "esri/Graphic", "esri/geometry/Extent"
-], function (Map, MapView, FeatureLayer, GraphicsLayer, Graphic, Extent) {
+    "esri/layers/WebTileLayer", "esri/Graphic", "esri/geometry/Extent", "esri/geometry/support/webMercatorUtils"
+], function (Map, MapView, FeatureLayer, GraphicsLayer, WebTileLayer, Graphic, Extent, webMercatorUtils) {
 
     // ── DATA ──
     const BASE       = "https://services3.arcgis.com/zhmVWeFi3qKWY2Y8/arcgis/rest/services/";
-    const URL_BANDS  = BASE + "DTM10_0_2_4_4326/FeatureServer/0";
+    const URL_BANDS  = BASE + "fasce_quota_leggero_4326/FeatureServer/0";
     const URL_ROUTE  = BASE + "TRACK_OLANDA_DEF_4326/FeatureServer/0";
     const URL_POINTS = BASE + "WAYPOINTS_OLANDA_DEF_4326/FeatureServer/1";
 
     // Map scale used for every stop (1 : SCALE_STOP). Smaller number = closer.
-    // The map has no basemap, so it has no zoom levels: the view is controlled by scale only.
+    // The view is controlled by scale, not by zoom levels, so the stop scale is the same whatever the basemap.
     const SCALE_STOP = 50000;
+    // Edited texts for the stops (key = "node" field). When a stop has no entry here, the layer text is used.
+    const TEXTS = {
+            "70": {
+                    "title": "Eastern Scheldt Barrier",
+                    "text": "The Eastern Scheldt Barrier closes the Oosterschelde between Schouwen-Duiveland and Noord-Beveland. Built from 1976 to 1986, it is 9 km long, with 65 piers and 62 floodgates. The gates stay open for the tide and are lowered only when the water is forecast to rise more than 3 m above NAP, about once a year. All of them can be closed in 82 minutes."
+            },
+            "4": {
+                    "title": "Veerse Gatdam",
+                    "text": "The Veerse Gatdam closes the Veerse Gat between Walcheren and Noord-Beveland. It was completed in 1961, a year after the Zandkreekdam, and is 2.8 km long. Together the two dams turned an inlet of the sea into the Veerse Meer, a lake without tide. The sandbanks that once lay in the inlet are now small islands used for recreation."
+            },
+            "35": {
+                    "title": "Zandkreekdam",
+                    "text": "The Zandkreekdam closes the Zandkreek between Noord-Beveland and Zuid-Beveland. Opened in 1960, it was the first Delta Work in Zeeland and is 830 m long. It gave Noord-Beveland its first road link to the mainland, ending the island's dependence on the ferry. Closing the Zandkreek first also made it easier to build the larger Veerse Gatdam."
+            },
+            "99": {
+                    "title": "Philipsdam",
+                    "text": "The Philipsdam, completed in 1987, keeps two bodies of water apart: the salt water of the Oosterschelde and the fresh water of the Volkerak-Zoommeer. It was built so that the Eastern Scheldt Barrier could stay open. With the Oesterdam, it makes the estuary smaller, so that the tide stays strong enough to preserve its natural habitats."
+            },
+            "76": {
+                    "title": "Bathse Spuisluis",
+                    "text": "The Bathse Spuisluis at Bath, completed in 1987, is a sluice that lets surplus fresh water flow out of the Zoommeer, so that its level does not rise too high. It works together with the Philipsdam and the Oesterdam, which keep the freshwater lakes and the salt Oosterschelde apart. It is one of the lesser-known Delta Works."
+            },
+            "72": {
+                    "title": "Oesterdam",
+                    "text": "The Oesterdam connects Tholen with Zuid-Beveland and separates the salt water of the Oosterschelde from the fresh water of the Bergsche Diep. Work began in 1979, but the dam could only be completed once the Eastern Scheldt Barrier was working, because the barrier had to be closed for a time during construction. With the Philipsdam, it keeps the tide in the estuary strong."
+            },
+            "90": {
+                    "title": "Grevelingendam",
+                    "text": "The Grevelingendam joins Schouwen-Duiveland and Goeree-Overflakkee. At 6 km long, it was completed in 1965 and closed the eastern end of the Grevelingen. The western end was closed by the Brouwersdam in 1971, and the former arm of the sea became the Grevelingenmeer, a saltwater lake without tide that is now used for water sports."
+            },
+            "88": {
+                    "title": "Brouwersdam",
+                    "text": "The Brouwersdam closes the Grevelingen off from the North Sea, between Goeree-Overflakkee and Schouwen-Duiveland. Completed in 1971, it made the coastline shorter and stronger and protects a large area behind it. It was the first Delta Work for which Rijkswaterstaat involved landscape architects, so the dam blends into the dunes. Today it is a centre for water sports."
+            },
+            "65": {
+                    "title": "Flood Disaster Museum",
+                    "text": "The Watersnoodmuseum stands in a creek area left by the 1953 flood, inside four caissons used to close the last breach in the dike at Ouwerkerk. In the night of 31 January to 1 February 1953, 1,836 people died in the Netherlands and 200,000 hectares of land were flooded. The museum tells this story and explains why water safety still matters."
+            },
+            "43": {
+                    "title": "Drowned villages of South Beveland",
+                    "text": "Zeeland has about 120 drowned villages. From the north coast of South Beveland you look over the Verdronken Land, a salt marsh and mudflat where villages such as Schoudee, Nieuwlande and Tolsende once stood, together with the city of Reimerswaal. Their remains lie under the mud. The Delta Works were built so that Zeeland would not lose more land."
+            }
+    };
     // Used only if the route cannot be loaded: order of the stops along the route
     const ORDER_FALLBACK = [70, 4, 35, 99, 76, 72, 90, 88];
-    // The whole data window: what the user sees when the map opens
-    const HOME = new Extent({ xmin: 3.383, ymin: 51.249, xmax: 4.456, ymax: 51.882, spatialReference: { wkid: 4326 } });
+    // What the user sees when the map opens: the whole route (bounding box of the track plus a 6% margin)
+    const HOME = new Extent({ xmin: 3.578, ymin: 51.372, xmax: 4.276, ymax: 51.760, spatialReference: { wkid: 4326 } });
+    // Space kept free around the whole route when the map opens
+    const HOME_PADDING = { top: 16, bottom: 16, left: 16, right: 16 };
 
     // ── LAYERS ──
+    // Test switch: false = the elevation bands (land) are hidden, so only the PDOK water shows under route and points.
+    const SHOW_BANDS = false;
+    // Basemap under the layers. "esri-gray" = Esri Light Gray Canvas (labels hidden). "pdok-water" = official Dutch water tiles.
+    const BASEMAP = "esri-gray";
+
     function fill(hex) {
         return { type: "simple-fill", color: hex, outline: { color: hex, width: 0.5 } };
     }
 
     // Land in warm neutral tones (darker = lower). The blue elevation bands belong to the Problem map.
+    // Water from the official Dutch topography (PDOK, BRT Achtergrondkaart, theme "water"), CC-BY 4.0.
+    // It sits under the land, so the coast comes from Top10NL and not from the elevation model.
+    const waterTiles = new WebTileLayer({
+        urlTemplate: "https://service.pdok.nl/brt/achtergrondkaart/wmts/v2_0/water/EPSG:3857/{level}/{col}/{row}.png",
+        copyright: "Kaartgegevens © Kadaster (BRT Achtergrondkaart, PDOK)"
+    });
+
     const bandsLayer = new FeatureLayer({
-        url: URL_BANDS, minScale: 0, maxScale: 0, popupEnabled: false,
+        url: URL_BANDS, minScale: 0, maxScale: 0, popupEnabled: false, visible: SHOW_BANDS,
+        definitionExpression: "DN <> 999",   // the water of the elevation model is not drawn
         renderer: {
             type: "unique-value", field: "DN",
             uniqueValueInfos: [
                 { value: "1",   symbol: fill("#D5C0A7") },  // land below sea level
                 { value: "2",   symbol: fill("#E3D5C4") },  // land 0 to 2 m
                 { value: "3",   symbol: fill("#EEE5DB") },  // land 2 to 4 m
-                { value: "0",   symbol: fill("#F6F1EC") },  // land more than 4 m
-                { value: "999", symbol: fill("#00a0f0") }   // water
+                { value: "0",   symbol: fill("#F6F1EC") }   // land more than 4 m
             ]
         }
     });
 
     const routeLayer = new FeatureLayer({
         url: URL_ROUTE, minScale: 0, maxScale: 0, popupEnabled: false,
+        blendMode: "multiply",   // the route is multiplied with the basemap, so the background shows through
         renderer: { type: "simple", symbol: { type: "simple-line", color: "#d7263d", width: 2.5 } }
     });
 
@@ -466,13 +406,60 @@ require([
         }
     });
 
+    const labelLayer = new GraphicsLayer();
     const tooltipLayer = new GraphicsLayer();
-    const map = new Map({ layers: [bandsLayer, routeLayer, pointsLayer, tooltipLayer] });
+    const useEsri = BASEMAP === "esri-gray";
+    const map = new Map({
+        basemap: useEsri ? "gray-vector" : null,
+        layers: (useEsri ? [] : [waterTiles]).concat([bandsLayer, routeLayer, pointsLayer, tooltipLayer, labelLayer])   // labels on top of everything
+    });
+
+    // The Esri basemap is drawn from vector tiles. Its text labels are hidden by default
+    // and the reader can switch them on with the "Aa" button. Icons always stay hidden.
+    let labelLayers = [], refLayers = [], labelsOn = false;
+
+    function applyLabels() {
+        refLayers.forEach(l => { l.visible = labelsOn; });
+        labelLayers.forEach(item => {
+            item.ids.forEach(id => item.layer.setStyleLayerVisibility(id, labelsOn ? "visible" : "none"));
+        });
+    }
+
+    function setupBasemapLabels() {
+        const b = map.basemap;
+        if (!b) return;
+        b.load().then(() => {
+            const refs = b.referenceLayers.toArray();
+            b.baseLayers.toArray().concat(refs).forEach(layer => {
+                if (layer.type !== "vector-tile") {
+                    if (refs.indexOf(layer) !== -1) refLayers.push(layer);
+                    return;
+                }
+                layer.load().then(() => {
+                    const st = layer.currentStyleInfo && layer.currentStyleInfo.style;
+                    if (!st || !st.layers) { console.warn("Basemap style cannot be read"); return; }
+                    const symbols = st.layers.filter(sl => sl.type === "symbol");
+                    let texts = symbols.filter(sl => sl.layout && sl.layout["text-field"]);
+                    if (!texts.length) texts = symbols;   // fallback: every symbol layer counts as a label
+                    const textIds = texts.map(sl => sl.id);
+                    symbols.forEach(sl => {
+                        if (textIds.indexOf(sl.id) === -1) layer.setStyleLayerVisibility(sl.id, "none");   // icons stay hidden
+                    });
+                    labelLayers.push({ layer: layer, ids: textIds });
+                    console.info("Basemap labels: " + textIds.length + " text layers found");
+                    applyLabels();
+                });
+            });
+            applyLabels();
+        }).catch(err => console.error("Basemap could not be loaded", err));
+    }
+    if (useEsri) setupBasemapLabels();
 
     const view = new MapView({
         container: "viewDiv",
         map: map,
         popupEnabled: false,
+        padding: HOME_PADDING,
         extent: HOME,
         constraints: { minScale: 2300000, maxScale: 10000, snapToZoom: false }
     });
@@ -491,15 +478,52 @@ require([
     // ── MAP PADDING — keeps the point centred in the part of the map not covered by the panel ──
     function updateMapPadding() {
         const open = panel.classList.contains("visible");
-        view.padding = { top: 0, bottom: 0, left: 0, right: open ? panel.offsetWidth : 0 };
+        view.padding = open ? { top: 0, bottom: 0, left: 0, right: panel.offsetWidth } : HOME_PADDING;
     }
 
-    // ── VIDEO GALLERY ──
+    // Fit the whole route inside the free part of the view (computed here, so it does not depend on how the view starts)
+    function fitHome(animate) {
+        const e = webMercatorUtils.geographicToWebMercator(HOME);
+        const pad = view.padding || {};
+        const w = view.width - (pad.left || 0) - (pad.right || 0);
+        const h = view.height - (pad.top || 0) - (pad.bottom || 0);
+        const res = Math.max(e.width / w, e.height / h);
+        return view.goTo(
+            { target: e.center, scale: res * 96 / 0.0254 },
+            animate ? { duration: 1200, easing: "ease-in-out" } : { animate: false }
+        );
+    }
+
+    // ── PREVIOUS / NEXT ARROWS, floating either side of the selected point ──
+    const prevEl = document.getElementById("prevBtn");
+    const nextEl = document.getElementById("nextBtn");
+    let arrowsOn = false;   // shown only when the map has arrived on the stop
+
+    // The arrows stay where they are on the screen, at the two sides of the free part of the map,
+    // so they do not move when the reader pans or zooms.
+    function placeStopNav() {
+        let show = false;
+        if (arrowsOn && currentIdx >= 0) {
+            const pad = view.padding || {};
+            const edge = 12 + 15;   // margin from the edge + half the button
+            const top = (pad.top || 0), bottom = view.height - (pad.bottom || 0);
+            prevEl.style.left = ((pad.left || 0) + edge) + "px";
+            nextEl.style.left = (view.width - (pad.right || 0) - edge) + "px";
+            prevEl.style.top = nextEl.style.top = ((top + bottom) / 2) + "px";
+            show = true;
+        }
+        prevEl.classList.toggle("on", show);
+        nextEl.classList.toggle("on", show);
+    }
+    function setArrows(on) {
+        arrowsOn = on;
+        placeStopNav();
+    }
+
+    // ── VIDEO (the first one of the stop; any others are linked in the text) ──
     const gallery = document.getElementById("panelGallery");
     const track   = document.getElementById("galleryTrack");
-    const dotsEl  = document.getElementById("galleryDots");
-    let videoIds  = [];
-    let gIdx      = 0;
+    let videoId   = null;
 
     function vimeoId(u) {
         const m = /vimeo\.com\/(?:video\/)?(\d+)/.exec(u);
@@ -513,49 +537,16 @@ require([
     }
 
     function initGallery(urls) {
-        videoIds = urls.map(vimeoId).filter(Boolean);
-        track.innerHTML = "";
-        dotsEl.innerHTML = "";
-        videoIds.forEach((id, i) => {
-            const slide = document.createElement("div");
-            slide.className = "gallery-slide";
-            slide.innerHTML = '<iframe src="' + playerUrl(id, false) + '" title="Video ' + (i + 1) + '" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>';
-            track.appendChild(slide);
-            const dot = document.createElement("button");
-            dot.className = "gallery-dot";
-            dot.setAttribute("aria-label", "Video " + (i + 1));
-            dot.addEventListener("click", () => galleryGoTo(i));
-            dotsEl.appendChild(dot);
-        });
-        gallery.classList.toggle("empty", videoIds.length === 0);
-        gallery.classList.toggle("single", videoIds.length <= 1);
-        gIdx = 0;
-        updateGalleryPosition();
+        videoId = urls.map(vimeoId).filter(Boolean)[0] || null;
+        track.innerHTML = videoId
+            ? '<div class="gallery-slide"><iframe src="' + playerUrl(videoId, false) + '" title="Video" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe></div>'
+            : "";
+        gallery.classList.toggle("empty", !videoId);
     }
-
-    // Reloading an iframe is the simplest way to stop a video that is playing
-    function stopSlide(i) {
-        const fr = track.children[i] && track.children[i].querySelector("iframe");
-        if (fr && videoIds[i]) fr.src = playerUrl(videoIds[i], false);
-    }
-
-    function galleryGoTo(i) {
-        if (!videoIds.length) return;
-        if (i !== gIdx) stopSlide(gIdx);
-        gIdx = (i + videoIds.length) % videoIds.length;
-        updateGalleryPosition();
-    }
-    function updateGalleryPosition() {
-        track.style.transform = "translateX(" + (-100 * gIdx) + "%)";
-        Array.from(dotsEl.children).forEach((d, i) => d.classList.toggle("active", i === gIdx));
-    }
-    document.getElementById("galleryPrev").addEventListener("click", () => galleryGoTo(gIdx - 1));
-    document.getElementById("galleryNext").addEventListener("click", () => galleryGoTo(gIdx + 1));
 
     function clearGallery() {
         track.innerHTML = "";
-        dotsEl.innerHTML = "";
-        videoIds = [];
+        videoId = null;
         gallery.classList.add("empty");
     }
 
@@ -564,9 +555,10 @@ require([
     const lightboxFrame = document.getElementById("lightboxFrame");
 
     function openLightbox() {
-        const id = videoIds[gIdx];
+        const id = videoId;
         if (!id) return;
-        stopSlide(gIdx);
+        const fr = track.querySelector("iframe");
+        if (fr) fr.src = playerUrl(id, false);   // stops the small video
         lightboxFrame.innerHTML = '<iframe src="' + playerUrl(id, true) + '" title="Video" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>';
         lightbox.classList.add("open");
     }
@@ -581,9 +573,11 @@ require([
     // ── PANEL ──
     function showSidePanel(idx) {
         const a = allPoints[idx].attributes;
-        document.getElementById("locationName").textContent = a.titolo_en || "Delta Works";
-        document.getElementById("locationDescription").textContent = String(a.testo_en || "").trim();
-        document.getElementById("counterText").textContent = (idx + 1) + " / " + allPoints.length;
+        const ed = TEXTS[a.node];
+        document.getElementById("locationName").textContent = (ed && ed.title) || a.titolo_en || "Delta Works";
+        document.getElementById("locationDescription").textContent = ((ed && ed.text) || String(a.testo_en || "")).trim();
+        document.getElementById("counterText").textContent = "Stop " + (idx + 1) + " of " + allPoints.length;
+        document.getElementById("nodePlate").textContent = a.node != null ? a.node : idx + 1;
 
         const urls = linksOf(a);
         const links = document.getElementById("locationLinks");
@@ -591,12 +585,73 @@ require([
         urls.forEach((u, i) => {
             const el = document.createElement("a");
             el.href = u; el.target = "_blank"; el.rel = "noopener";
-            el.textContent = (urls.length > 1 ? "Video " + (i + 1) : "Video") + " on Vimeo ↗";
+            el.textContent = urls.length > 1 ? "Watch video " + (i + 1) + " on Vimeo" : "Watch on Vimeo";
             links.appendChild(el);
         });
         initGallery(urls);
         document.querySelector(".panel-body").scrollTop = 0;
         panel.classList.add("visible");
+    }
+
+    // ── LABELS OF THE STOPS ──
+    // Each label is level with its dot and sits to the east or to the west of it:
+    // a dot in the east half of the map gets its label on the east, a dot in the west half on the west.
+    // Dots on the same side that are close to each other (under 9 km) form a group:
+    // going from south to north, the labels alternate east, west, east...
+    function stopName(f) {
+        const ed = TEXTS[f.attributes.node];
+        return (ed && ed.title) || f.attributes.titolo_en || "";
+    }
+
+    function placeLabels() {
+        labelLayer.removeAll();
+        const centerLon = (HOME.xmin + HOME.xmax) / 2;
+        const stops = allPoints.map(f => {
+            const ll = webMercatorUtils.xyToLngLat(f.geometry.x, f.geometry.y);
+            return { f: f, lon: ll[0], lat: ll[1], base: ll[0] > centerLon ? "east" : "west", group: -1 };
+        });
+        stops.forEach(s => { s.side = s.base; });
+
+        const km = (a, b) => Math.hypot(
+            (a.lon - b.lon) * 111.32 * Math.cos(a.lat * Math.PI / 180),
+            (a.lat - b.lat) * 110.57
+        );
+
+        // Groups of close dots (same side)
+        let groups = 0;
+        stops.forEach((s, i) => {
+            if (s.group === -1) s.group = groups++;
+            for (let j = i + 1; j < stops.length; j++) {
+                const o = stops[j];
+                if (o.base === s.base && km(s, o) < 9) {
+                    if (o.group === -1) o.group = s.group;
+                    else if (o.group !== s.group) {
+                        const old = o.group;
+                        stops.forEach(x => { if (x.group === old) x.group = s.group; });
+                    }
+                }
+            }
+        });
+        for (let g = 0; g < groups; g++) {
+            const members = stops.filter(s => s.group === g).sort((a, b) => a.lat - b.lat);
+            if (members.length < 2) continue;
+            members.forEach((s, k) => { s.side = k % 2 === 0 ? "east" : "west"; });
+        }
+
+        stops.forEach(s => {
+            const east = s.side === "east";
+            labelLayer.add(new Graphic({
+                geometry: s.f.geometry,
+                symbol: {
+                    type: "text", text: stopName(s.f), color: "#000000",
+                    font: { size: 12, weight: "bold", family: "Barlow Semi Condensed, Barlow, sans-serif" },
+                    haloColor: "white", haloSize: 2,
+                    horizontalAlignment: east ? "left" : "right",
+                    verticalAlignment: "middle",
+                    xoffset: east ? 9 : -9
+                }
+            }));
+        });
     }
 
     function showPointTooltip(f) {
@@ -605,17 +660,9 @@ require([
             geometry: f.geometry,
             symbol: {
                 type: "simple-marker",
-                color: [212, 98, 42, 0.25],
-                size: 28,
-                outline: { color: [212, 98, 42, 0.9], width: 3 }
-            }
-        }));
-        tooltipLayer.add(new Graphic({
-            geometry: f.geometry,
-            symbol: {
-                type: "text", color: "#1B3A2D", text: f.attributes.titolo_en || "",
-                font: { size: 11, weight: "bold", family: "Source Sans 3, sans-serif" },
-                haloColor: "white", haloSize: 2, yoffset: -25
+                color: [255, 255, 255, 0],
+                size: 26,
+                outline: { color: [215, 38, 61, 1], width: 3 }
             }
         }));
     }
@@ -702,14 +749,16 @@ require([
         const id = ++moveId;
         const toStop = d => view.goTo({ target: to.geometry, scale: SCALE_STOP }, { duration: d, easing: "ease-in-out" });
 
+        const arrived = () => { if (id === moveId) setArrows(true); };
+
         const ext = from ? routeExtent(from, to) : null;
         if (!ext) {
-            toStop(1600).catch(noop);
+            toStop(1600).then(arrived).catch(noop);
             return;
         }
         view.goTo(ext, { duration: 1400, easing: "ease-in-out" })
             .then(() => new Promise(r => setTimeout(r, 500)))
-            .then(() => { if (id === moveId) return toStop(1400); })
+            .then(() => { if (id === moveId) return toStop(1400).then(arrived); })
             .catch(noop);
     }
 
@@ -721,6 +770,7 @@ require([
         currentIdx = (idx + allPoints.length) % allPoints.length;
         const f = allPoints[currentIdx];
 
+        setArrows(false);
         showSidePanel(currentIdx);
         showPointTooltip(f);
         updateMapPadding();
@@ -735,10 +785,18 @@ require([
         clearGallery();
         closeLightbox();
         tooltipLayer.removeAll();
+        setArrows(false);
         updateMapPadding();
         startBtn.classList.add("on");
         // Back to the whole map
-        view.goTo(HOME, { duration: 1200, easing: "ease-in-out" }).catch(noop);
+        fitHome(true).catch(noop);
+    }
+
+    // Back to the selected stop (same framing as when the map arrived), after the reader has moved away
+    function recenter() {
+        if (currentIdx < 0) return;
+        moveId++;
+        view.goTo({ target: allPoints[currentIdx].geometry, scale: SCALE_STOP }, { duration: 900, easing: "ease-in-out" }).catch(noop);
     }
 
     function navigatePrevious() { selectPoint(currentIdx <= 0 ? allPoints.length - 1 : currentIdx - 1); }
@@ -757,72 +815,45 @@ require([
 
     // Click on a map point; click elsewhere closes the panel
     view.on("click", e => {
-        view.hitTest(e, { include: [pointsLayer] }).then(r => {
+        view.hitTest(e, { include: [pointsLayer, tooltipLayer] }).then(r => {
+            // The ring around the selected stop counts as the stop itself (it is a bigger target)
+            const ring = r.results.find(x => x.graphic && x.graphic.layer === tooltipLayer);
+            if (ring && started) { recenter(); return; }
             const hit = r.results.find(x => x.graphic && x.graphic.layer === pointsLayer);
             if (!hit) { if (started) closePanel(); return; }
             const idx = allPoints.findIndex(f => f.attributes.node === hit.graphic.attributes.node);
-            if (idx !== -1 && idx !== currentIdx) selectPoint(idx);
+            if (idx === -1) return;
+            if (idx === currentIdx && started) recenter(); else selectPoint(idx);
         });
     });
 
     // Pointer cursor on hover
     view.on("pointer-move", e => {
-        view.hitTest(e, { include: [pointsLayer] }).then(r => {
+        view.hitTest(e, { include: [pointsLayer, tooltipLayer] }).then(r => {
             view.container.style.cursor = r.results.length ? "pointer" : "";
         });
     });
 
-    // ── SCALE BAR ──
-    const scaleEl = document.getElementById("scalebar");
-    let scaleKey = "";
-
-    // Largest "nice" length (1, 2 or 5 x power of ten) that is not longer than maxMeters
-    function niceLength(maxMeters) {
-        const base = Math.pow(10, Math.floor(Math.log(maxMeters) / Math.LN10));
-        const f = maxMeters / base;
-        return (f >= 5 ? 5 : f >= 2 ? 2 : 1) * base;
-    }
-    const num = v => String(parseFloat(v.toFixed(2)));
-
-    function updateScale() {
-        if (!view.center || !view.resolution) return;
-        let mpp = view.resolution;
-        if (view.spatialReference && view.spatialReference.isWebMercator) {
-            // Web Mercator units are stretched at this latitude: correct them to ground metres
-            mpp = mpp * Math.cos(Math.atan(Math.sinh(view.center.y / 6378137)));
-        }
-        const total = niceLength(170 * mpp);
-        const px = total / mpp;
-        const lead = Math.round(total / Math.pow(10, Math.floor(Math.log(total) / Math.LN10)));
-        const seg = lead === 5 ? 5 : 4;
-        const km = total >= 1000, div = km ? 1000 : 1;
-
-        const key = total + "|" + Math.round(px);
-        if (key === scaleKey) return;
-        scaleKey = key;
-
-        const x0 = 4, y = 16, W = Math.ceil(px) + 44, H = 32;
-        let s = '<line x1="' + x0 + '" y1="' + y + '" x2="' + (x0 + px) + '" y2="' + y + '" stroke="#000" stroke-width="2"/>';
-        for (let i = 0; i <= seg; i++) {
-            const x = x0 + px * i / seg, h = (i === 0 || i === seg) ? 10 : 6;
-            s += '<line x1="' + x + '" y1="' + (y - h) + '" x2="' + x + '" y2="' + y + '" stroke="#000" stroke-width="2"/>';
-        }
-        s += '<text x="' + x0 + '" y="' + (y + 14) + '" text-anchor="middle">0</text>';
-        if (seg === 4) s += '<text x="' + (x0 + px / 2) + '" y="' + (y + 14) + '" text-anchor="middle">' + num(total / 2 / div) + '</text>';
-        s += '<text x="' + (x0 + px) + '" y="' + (y + 14) + '" text-anchor="middle">' + num(total / div) + (km ? " km" : " m") + '</text>';
-        scaleEl.innerHTML = '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '">' + s + '</svg>';
-    }
-    view.watch("scale", updateScale);
 
     // ── LOAD ──
     view.when(() => {
+        fitHome(false).catch(noop);
         const loader = document.getElementById("loading");
         loader.classList.add("hidden");
         setTimeout(() => loader.style.display = "none", 700);
 
         view.ui.move("zoom", "top-right");
-        view.ui.add(scaleEl, "bottom-left");
-        updateScale();
+        if (useEsri) {
+            const labelsBtn = document.getElementById("labelsBtn");
+            labelsBtn.style.display = "flex";
+            labelsBtn.addEventListener("click", () => {
+                labelsOn = !labelsOn;
+                applyLabels();
+                labelsBtn.setAttribute("aria-pressed", String(labelsOn));
+                labelsBtn.title = labelsOn ? "Hide labels" : "Show labels";
+            });
+            view.ui.add(labelsBtn, "top-right");
+        }
 
         const qp = pointsLayer.createQuery();
         qp.where = "mappa = 'Solution'";
@@ -856,6 +887,7 @@ require([
             });
         }
         allPoints = feats;
+        placeLabels();
 
         // The map opens on the whole delta, with the button to start
         startBtn.classList.add("on");
@@ -864,7 +896,7 @@ require([
         document.getElementById("loading").classList.add("hidden");
     });
 
-    window.addEventListener("resize", updateMapPadding);
+    window.addEventListener("resize", () => { updateMapPadding(); placeStopNav(); });
 });
 </script>
 </body>
