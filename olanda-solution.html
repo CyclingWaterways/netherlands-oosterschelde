@@ -184,7 +184,8 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--route); outline
     position: fixed;
     z-index: 800;
     width: 30px; height: 30px;
-    transform: translate(-50%, -50%);
+    top: 50%;
+    transform: translateY(-50%);
     box-shadow: 0 1px 4px rgba(0,0,0,0.25);
     opacity: 0; pointer-events: none;
     transition: opacity 0.2s ease, background 0.15s ease, color 0.15s ease;
@@ -359,6 +360,54 @@ require([
     const HOME_PADDING = { top: 16, bottom: 16, left: 16, right: 16 };
 
     // ── LAYERS ──
+    // Symbol of the stops: the "target" of the Gudenå podcast points (two black rings and a red centre).
+    // It is the same CIM symbol that the Gudenå WebMap uses (redrawn with the same proportions), because
+    // CIM symbols are the ones a layer can draw reliably; SVG images are not.
+    function cimRing(r) {
+        const pts = [];
+        for (let i = 0; i <= 36; i++) {
+            const a = i / 36 * 2 * Math.PI;
+            pts.push([32 + r * Math.cos(a), 32 + r * Math.sin(a)]);
+        }
+        pts[36] = pts[0].slice();
+        return pts;
+    }
+    function cimStroke(r) {
+        return {
+            type: "CIMMarkerGraphic",
+            geometry: { rings: [cimRing(r)] },
+            symbol: { type: "CIMPolygonSymbol", symbolLayers: [{ type: "CIMSolidStroke", enable: true, width: 4.5, color: [0, 0, 0, 255] }] }
+        };
+    }
+    function stopSymbol(size) {
+        return {
+            type: "cim",
+            data: {
+                type: "CIMSymbolReference",
+                symbol: {
+                    type: "CIMPointSymbol",
+                    symbolLayers: [{
+                        type: "CIMVectorMarker",
+                        enable: true,
+                        size: size,
+                        frame: { xmin: 0, ymin: 0, xmax: 64, ymax: 64 },
+                        scaleSymbolsProportionally: true,
+                        respectFrame: true,
+                        markerGraphics: [
+                            cimStroke(26),
+                            cimStroke(16),
+                            {
+                                type: "CIMMarkerGraphic",
+                                geometry: { rings: [cimRing(7)] },
+                                symbol: { type: "CIMPolygonSymbol", symbolLayers: [{ type: "CIMSolidFill", enable: true, color: [255, 0, 0, 255] }] }
+                            }
+                        ]
+                    }]
+                }
+            }
+        };
+    }
+    const STOP_SIZE = 16;            // normal stop
     // Test switch: false = the elevation bands (land) are hidden, so only the PDOK water shows under route and points.
     const SHOW_BANDS = false;
     // Basemap under the layers. "esri-gray" = Esri Light Gray Canvas (labels hidden). "pdok-water" = official Dutch water tiles.
@@ -402,7 +451,7 @@ require([
         minScale: 0, maxScale: 0, popupEnabled: false,
         renderer: {
             type: "simple",
-            symbol: { type: "simple-marker", style: "circle", size: 11, color: "#ffe94d", outline: { color: "#1B3A2D", width: 1 } }
+            symbol: stopSymbol(STOP_SIZE)
         }
     });
 
@@ -501,16 +550,16 @@ require([
 
     // The arrows stay where they are on the screen, at the two sides of the free part of the map,
     // so they do not move when the reader pans or zooms.
+    // The arrows are anchored to the edges of the free part of the map: 12 px from the left edge
+    // and 12 px from the side panel. The panel width is read directly, so the position stays right
+    // even when the browser zoom changes.
     function placeStopNav() {
-        let show = false;
-        if (arrowsOn && currentIdx >= 0) {
-            const pad = view.padding || {};
-            const edge = 12 + 15;   // margin from the edge + half the button
-            const top = (pad.top || 0), bottom = view.height - (pad.bottom || 0);
-            prevEl.style.left = ((pad.left || 0) + edge) + "px";
-            nextEl.style.left = (view.width - (pad.right || 0) - edge) + "px";
-            prevEl.style.top = nextEl.style.top = ((top + bottom) / 2) + "px";
-            show = true;
+        const show = arrowsOn && currentIdx >= 0;
+        if (show) {
+            const panelW = panel.classList.contains("visible") ? panel.offsetWidth : 0;
+            prevEl.style.left = "12px";
+            nextEl.style.left = "auto";
+            nextEl.style.right = (panelW + 12) + "px";
         }
         prevEl.classList.toggle("on", show);
         nextEl.classList.toggle("on", show);
@@ -648,23 +697,36 @@ require([
                     haloColor: "white", haloSize: 2,
                     horizontalAlignment: east ? "left" : "right",
                     verticalAlignment: "middle",
-                    xoffset: east ? 9 : -9
+                    xoffset: east ? 15 : -15
                 }
             }));
         });
     }
 
-    function showPointTooltip(f) {
+    // Highlight of the selected stop, copied from the Åsteder map:
+    // the light blue ring (size 26, same colours) plus the ArcGIS highlight of the point.
+    let highlightHandle = null;
+
+    function clearHighlight() {
         tooltipLayer.removeAll();
+        if (highlightHandle) { highlightHandle.remove(); highlightHandle = null; }
+    }
+
+    function showPointTooltip(f) {
+        clearHighlight();
         tooltipLayer.add(new Graphic({
             geometry: f.geometry,
             symbol: {
                 type: "simple-marker",
-                color: [255, 255, 255, 0],
+                color: [74, 127, 158, 0.25],
                 size: 26,
-                outline: { color: [215, 38, 61, 1], width: 3 }
+                outline: { color: [74, 127, 158, 0.9], width: 3 }
             }
         }));
+        const layer = pointsLayer;
+        view.whenLayerView(layer).then(lv => {
+            if (allPoints[currentIdx] === f) highlightHandle = lv.highlight(f);
+        }).catch(noop);
     }
 
     // ── ROUTE (to show the stretch between two stops) ──
@@ -784,7 +846,7 @@ require([
         panel.classList.remove("visible");
         clearGallery();
         closeLightbox();
-        tooltipLayer.removeAll();
+        clearHighlight();
         setArrows(false);
         updateMapPadding();
         startBtn.classList.add("on");

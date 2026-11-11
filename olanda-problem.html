@@ -193,7 +193,8 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--route); outline
     position: fixed;
     z-index: 800;
     width: 30px; height: 30px;
-    transform: translate(-50%, -50%);
+    top: 50%;
+    transform: translateY(-50%);
     box-shadow: 0 1px 4px rgba(0,0,0,0.25);
     opacity: 0; pointer-events: none;
     transition: opacity 0.2s ease, background 0.15s ease, color 0.15s ease;
@@ -223,6 +224,19 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--route); outline
 /* Labels button */
 .labels-btn { width: 26px; height: 26px; margin-top: 2px; font-size: 12px; font-weight: 600; }
 .sq-btn[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+
+/* "Start the tour" button inside the panel */
+.tour-btn {
+    margin-top: 6px;
+    padding: 12px 22px;
+    background: var(--ink); color: var(--paper);
+    border: 0; border-radius: 2px;
+    font-size: 16px; font-weight: 500;
+    cursor: pointer;
+    align-self: flex-start;
+    transition: background 0.15s ease;
+}
+.tour-btn:hover { background: var(--route); }
 
 /* Legend of the elevation bands */
 .legend {
@@ -313,6 +327,7 @@ body.panel-open .legend { right: calc(var(--panel-width) + 12px); }
         <li><span class="sw" style="background:#52c5ff"></span>0 to 2 m above sea level</li>
         <li><span class="sw" style="background:#a8e2ff"></span>2 to 4 m above sea level</li>
         <li><span class="sw" style="border:0"><svg viewBox="0 0 16 16" width="16" height="16"><circle cx="8" cy="8" r="4.5" fill="#000" stroke="#fff" stroke-width="1.2"/></svg></span>Drowned village</li>
+        <li><span class="sw" style="border:0"><svg viewBox="0 0 16 16" width="16" height="16"><circle cx="8" cy="8" r="3.5" fill="#d7263d" stroke="#fff" stroke-width="1"/></svg></span>Delta Works</li>
     </ul>
 </div>
 
@@ -421,8 +436,64 @@ require([
     const HOME_PADDING = { top: 16, bottom: 16, left: 16, right: 16 };
 
     // ── LAYERS ──
-    // The question marks sit where the dams are in the Solution map. Set to false to hide them.
-    const SHOW_QUESTION_MARKS = true;
+    // Symbol of the stops: the "target" of the Gudenå podcast points (two black rings and a red centre).
+    // It is the same CIM symbol that the Gudenå WebMap uses (redrawn with the same proportions), because
+    // CIM symbols are the ones a layer can draw reliably; SVG images are not.
+    function cimRing(r) {
+        const pts = [];
+        for (let i = 0; i <= 36; i++) {
+            const a = i / 36 * 2 * Math.PI;
+            pts.push([32 + r * Math.cos(a), 32 + r * Math.sin(a)]);
+        }
+        pts[36] = pts[0].slice();
+        return pts;
+    }
+    function cimStroke(r) {
+        return {
+            type: "CIMMarkerGraphic",
+            geometry: { rings: [cimRing(r)] },
+            symbol: { type: "CIMPolygonSymbol", symbolLayers: [{ type: "CIMSolidStroke", enable: true, width: 4.5, color: [0, 0, 0, 255] }] }
+        };
+    }
+    function stopSymbol(size) {
+        return {
+            type: "cim",
+            data: {
+                type: "CIMSymbolReference",
+                symbol: {
+                    type: "CIMPointSymbol",
+                    symbolLayers: [{
+                        type: "CIMVectorMarker",
+                        enable: true,
+                        size: size,
+                        frame: { xmin: 0, ymin: 0, xmax: 64, ymax: 64 },
+                        scaleSymbolsProportionally: true,
+                        respectFrame: true,
+                        markerGraphics: [
+                            cimStroke(26),
+                            cimStroke(16),
+                            {
+                                type: "CIMMarkerGraphic",
+                                geometry: { rings: [cimRing(7)] },
+                                symbol: { type: "CIMPolygonSymbol", symbolLayers: [{ type: "CIMSolidFill", enable: true, color: [255, 0, 0, 255] }] }
+                            }
+                        ]
+                    }]
+                }
+            }
+        };
+    }
+    const STOP_SIZE = 16;            // normal stop
+    // The dams of the Solution map, shown here as small red dots. Set to false to hide them.
+    const SHOW_DAMS = true;
+    // Static map: the view always shows the whole route; the arrows only change the panel and move the highlight.
+    const STATIC_MAP = true;
+    // true = the panel opens with an introduction and the "Start the tour" button; false = it opens on the first stop
+    const START_WITH_INTRO = true;
+    const INTRO = {
+        title: "Land at risk",
+        text: "Much of the land around the Oosterschelde lies below sea level or only a few metres above it. For centuries, storm floods took land and whole villages: Zeeland counts about 120 drowned villages. In 1953 the sea broke through the dikes again, and 1,836 people died in the Netherlands. Three places along the route tell this story."
+    };
 
     function fill(hex) {
         return { type: "simple-fill", color: hex, outline: { color: hex, width: 0.5 } };
@@ -474,17 +545,14 @@ require([
         }];
     }, err => console.warn("Drowned villages could not be loaded", err));
 
-    // Question marks where the dams will appear in the Solution map
-    const qSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">' +
-        '<circle cx="12" cy="12" r="10.5" fill="white" stroke="black" stroke-width="1.5"/>' +
-        '<text x="12" y="17.2" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="bold" fill="black">?</text></svg>';
+    // The dams, as small red dots (no labels, not clickable)
     const questionLayer = new FeatureLayer({
         url: URL_POINTS,
         definitionExpression: "mappa = 'Solution'",
-        minScale: 0, maxScale: 0, popupEnabled: false, visible: SHOW_QUESTION_MARKS,
+        minScale: 0, maxScale: 0, popupEnabled: false, visible: SHOW_DAMS,
         renderer: {
             type: "simple",
-            symbol: { type: "picture-marker", url: "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(qSvg), width: 20, height: 20 }
+            symbol: { type: "simple-marker", style: "circle", size: 6, color: "#d7263d", outline: { color: "#ffffff", width: 0.75 } }
         }
     });
 
@@ -495,7 +563,7 @@ require([
         minScale: 0, maxScale: 0, popupEnabled: false,
         renderer: {
             type: "simple",
-            symbol: { type: "simple-marker", style: "circle", size: 11, color: "#ffe94d", outline: { color: "#1B3A2D", width: 1 } }
+            symbol: stopSymbol(STOP_SIZE)
         }
     });
 
@@ -597,16 +665,16 @@ require([
 
     // The arrows stay where they are on the screen, at the two sides of the free part of the map,
     // so they do not move when the reader pans or zooms.
+    // The arrows are anchored to the edges of the free part of the map: 12 px from the left edge
+    // and 12 px from the side panel. The panel width is read directly, so the position stays right
+    // even when the browser zoom changes.
     function placeStopNav() {
-        let show = false;
-        if (arrowsOn && currentIdx >= 0) {
-            const pad = view.padding || {};
-            const edge = 12 + 15;   // margin from the edge + half the button
-            const top = (pad.top || 0), bottom = view.height - (pad.bottom || 0);
-            prevEl.style.left = ((pad.left || 0) + edge) + "px";
-            nextEl.style.left = (view.width - (pad.right || 0) - edge) + "px";
-            prevEl.style.top = nextEl.style.top = ((top + bottom) / 2) + "px";
-            show = true;
+        const show = arrowsOn && (currentIdx >= 0 || STATIC_MAP);
+        if (show) {
+            const panelW = panel.classList.contains("visible") ? panel.offsetWidth : 0;
+            prevEl.style.left = "12px";
+            nextEl.style.left = "auto";
+            nextEl.style.right = (panelW + 12) + "px";
         }
         prevEl.classList.toggle("on", show);
         nextEl.classList.toggle("on", show);
@@ -782,23 +850,36 @@ require([
                     haloColor: "white", haloSize: 2,
                     horizontalAlignment: east ? "left" : "right",
                     verticalAlignment: "middle",
-                    xoffset: east ? 9 : -9
+                    xoffset: east ? 15 : -15
                 }
             }));
         });
     }
 
-    function showPointTooltip(f) {
+    // Highlight of the selected stop, copied from the Åsteder map:
+    // the light blue ring (size 26, same colours) plus the ArcGIS highlight of the point.
+    let highlightHandle = null;
+
+    function clearHighlight() {
         tooltipLayer.removeAll();
+        if (highlightHandle) { highlightHandle.remove(); highlightHandle = null; }
+    }
+
+    function showPointTooltip(f) {
+        clearHighlight();
         tooltipLayer.add(new Graphic({
             geometry: f.geometry,
             symbol: {
                 type: "simple-marker",
-                color: [255, 255, 255, 0],
+                color: [74, 127, 158, 0.25],
                 size: 26,
-                outline: { color: [215, 38, 61, 1], width: 3 }
+                outline: { color: [74, 127, 158, 0.9], width: 3 }
             }
         }));
+        const layer = extraLayer.graphics.includes(f) ? extraLayer : pointsLayer;
+        view.whenLayerView(layer).then(lv => {
+            if (allPoints[currentIdx] === f) highlightHandle = lv.highlight(f);
+        }).catch(noop);
     }
 
     // ── ROUTE (to show the stretch between two stops) ──
@@ -904,11 +985,43 @@ require([
         currentIdx = (idx + allPoints.length) % allPoints.length;
         const f = allPoints[currentIdx];
 
+        if (STATIC_MAP) {
+            // The map does not move: only the panel and the highlight change
+            showSidePanel(currentIdx);
+            showPointTooltip(f);
+            updateMapPadding();
+            setArrows(true);
+            return;
+        }
+
         setArrows(false);
         showSidePanel(currentIdx);
         showPointTooltip(f);
         updateMapPadding();
         moveTo(prev, f);
+    }
+
+    // Introduction shown in the panel when the map opens (static map with START_WITH_INTRO)
+    function showIntro() {
+        currentIdx = -1;
+        clearHighlight();
+        clearGallery();
+        const plate = document.getElementById("nodePlate");
+        plate.textContent = "";
+        plate.style.display = "none";
+        document.getElementById("locationName").textContent = INTRO.title;
+        document.getElementById("locationDescription").textContent = INTRO.text;
+        document.getElementById("counterText").textContent = allPoints.length + " stops";
+        const links = document.getElementById("locationLinks");
+        links.innerHTML = "";
+        const btn = document.createElement("button");
+        btn.className = "tour-btn";
+        btn.textContent = "Start the tour";
+        btn.addEventListener("click", () => selectPoint(0));
+        links.appendChild(btn);
+        panel.classList.add("visible");
+        updateMapPadding();
+        setArrows(true);
     }
 
     function closePanel() {
@@ -918,7 +1031,7 @@ require([
         panel.classList.remove("visible");
         clearGallery();
         closeLightbox();
-        tooltipLayer.removeAll();
+        clearHighlight();
         setArrows(false);
         updateMapPadding();
         startBtn.classList.add("on");
@@ -928,6 +1041,7 @@ require([
 
     // Back to the selected stop (same framing as when the map arrived), after the reader has moved away
     function recenter() {
+        if (STATIC_MAP) { fitHome(true).catch(noop); return; }
         if (currentIdx < 0) return;
         moveId++;
         view.goTo({ target: allPoints[currentIdx].geometry, scale: SCALE_STOP }, { duration: 900, easing: "ease-in-out" }).catch(noop);
@@ -954,7 +1068,7 @@ require([
             const ring = r.results.find(x => x.graphic && x.graphic.layer === tooltipLayer);
             if (ring && started) { recenter(); return; }
             const hit = r.results.find(x => x.graphic && (x.graphic.layer === pointsLayer || x.graphic.layer === extraLayer));
-            if (!hit) { if (started) closePanel(); return; }
+            if (!hit) { if (started && !STATIC_MAP) closePanel(); return; }
             let idx = allPoints.indexOf(hit.graphic);   // stops added in the code
             if (idx === -1) idx = allPoints.findIndex(f => f.attributes.node != null && f.attributes.node === hit.graphic.attributes.node);
             if (idx === -1) return;
@@ -971,7 +1085,14 @@ require([
 
 
     // ── LOAD ──
+    if (STATIC_MAP) {
+        // The panel is always there: no central start button and no close button
+        startBtn.style.display = "none";
+        document.getElementById("closeBtn").style.display = "none";
+    }
+
     view.when(() => {
+        if (STATIC_MAP) { panel.classList.add("visible"); updateMapPadding(); }
         fitHome(false).catch(noop);
         const loader = document.getElementById("loading");
         loader.classList.add("hidden");
@@ -1014,7 +1135,7 @@ require([
         const monument = new Graphic({
             geometry: new Point({ x: xy[0], y: xy[1], spatialReference: view.spatialReference }),
             attributes: { node: null, titolo_en: MONUMENT.title, testo_en: MONUMENT.text, link: "", mappa: "Problem", image: MONUMENT.image },
-            symbol: { type: "simple-marker", style: "circle", size: 11, color: "#ffe94d", outline: { color: "#1B3A2D", width: 1 } }
+            symbol: stopSymbol(STOP_SIZE)
         });
         extraLayer.add(monument);
         feats.push(monument);
@@ -1034,14 +1155,20 @@ require([
         allPoints = feats;
         placeLabels();
 
-        // The map opens on the whole delta, with the button to start
-        startBtn.classList.add("on");
+        // The map opens on the whole route
+        if (STATIC_MAP) {
+            if (START_WITH_INTRO) showIntro(); else selectPoint(0);
+        } else {
+            startBtn.classList.add("on");
+        }
     }).catch(err => {
         console.error(err);
         document.getElementById("loading").classList.add("hidden");
     });
 
     window.addEventListener("resize", () => { updateMapPadding(); placeStopNav(); });
+    // The view knows its new size only after the resize: re-fit the whole route then
+    view.watch("size", () => { if (STATIC_MAP) fitHome(false).catch(noop); });
 });
 </script>
 </body>
