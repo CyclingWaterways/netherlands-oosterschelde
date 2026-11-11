@@ -106,6 +106,8 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--route); outline
 .gallery-track { height: 100%; }
 .gallery-slide { height: 100%; }
 .gallery-slide iframe { width: 100%; height: 100%; border: 0; display: block; }
+.gallery-blocked { display: flex; align-items: center; justify-content: center; background: #E6E6E6; }
+.gallery-blocked .tour-btn { align-self: center; margin: 0; text-decoration: none; }
 
 .sq-btn {
     width: 32px; height: 32px;
@@ -318,6 +320,8 @@ require([
     const BASE       = "https://services3.arcgis.com/zhmVWeFi3qKWY2Y8/arcgis/rest/services/";
     const URL_BANDS  = BASE + "fasce_quota_leggero_4326/FeatureServer/0";
     const URL_ROUTE  = BASE + "TRACK_OLANDA_DEF_4326/FeatureServer/0";
+    // The same route split into stretches, with the attribute that marks the stretches on a dam
+    const URL_ROUTE_DAMS = BASE + "TRACK_OLANDA_DEF_4326_dams/FeatureServer/0";
     const URL_POINTS = BASE + "WAYPOINTS_OLANDA_DEF_4326/FeatureServer/1";
 
     // Map scale used for every stop (1 : SCALE_STOP). Smaller number = closer.
@@ -432,6 +436,45 @@ require([
     // Basemap under the layers. "esri-gray" = Esri Light Gray Canvas (labels hidden). "pdok-water" = official Dutch water tiles.
     const BASEMAP = "esri-gray";
 
+    // ── Cycle route on a dam: the line is doubled (two parallel lines, same colour and width) ──
+    // Double line as a CIM symbol: two strokes, each moved sideways by `offset` points.
+    function doubleLineSymbol(width, offset) {
+        const stroke = off => ({
+            type: "CIMSolidStroke", enable: true, width: width, color: [215, 38, 61, 255],
+            capStyle: "Butt", joinStyle: "Round",
+            effects: [{ type: "CIMGeometricEffectOffset", method: "Rounded", offset: off, option: 0 }]
+        });
+        return {
+            type: "cim",
+            data: { type: "CIMSymbolReference", symbol: { type: "CIMLineSymbol", symbolLayers: [stroke(offset), stroke(-offset)] } }
+        };
+    }
+
+    // The attribute that marks the stretches on a dam is looked up in the layer (fields "dam", "diga" or "type"):
+    // the values that look like "dam" / "yes" / 1 select the dam stretches. What was found is written to the console.
+    function findDamFilter(layer) {
+        const names = layer.fields.map(f => f.name);
+        const cands = ["dam", "diga", "type"].map(c => names.find(n => n.toLowerCase() === c)).filter(Boolean);
+        const isDam = v => /dam|diga|yes|true|^1$/i.test(String(v));
+        function tryField(i) {
+            if (i >= cands.length) return Promise.resolve(null);
+            const f = cands[i];
+            return layer.queryFeatures({ where: "1=1", outFields: [f], returnDistinctValues: true, returnGeometry: false })
+                .then(r => {
+                    const vals = r.features.map(x => x.attributes[f]).filter(v => v !== null && v !== undefined && v !== "");
+                    console.info("Cycle route, field '" + f + "' has the values: " + JSON.stringify(vals));
+                    const dams = vals.filter(isDam);
+                    return dams.length ? { field: f, values: dams, text: typeof dams[0] === "string" } : tryField(i + 1);
+                })
+                .catch(() => tryField(i + 1));
+        }
+        return tryField(0);
+    }
+    function damSql(flt, onDam) {
+        const list = flt.values.map(v => flt.text ? "'" + String(v).replace(/'/g, "''") + "'" : v).join(", ");
+        return onDam ? flt.field + " IN (" + list + ")" : "(" + flt.field + " IS NULL OR " + flt.field + " NOT IN (" + list + "))";
+    }
+
     function fill(hex) {
         return { type: "simple-fill", color: hex, outline: { color: hex, width: 0.5 } };
     }
@@ -458,10 +501,38 @@ require([
         }
     });
 
+    // The whole route as one line: kept hidden, it is only the source of the geometry (order of the stops, movements).
+    // It is shown only if the split layer below cannot be used.
     const routeLayer = new FeatureLayer({
-        url: URL_ROUTE, minScale: 0, maxScale: 0, popupEnabled: false,
+        url: URL_ROUTE, minScale: 0, maxScale: 0, popupEnabled: false, visible: false,
         blendMode: "multiply",   // the route is multiplied with the basemap, so the background shows through
         renderer: { type: "simple", symbol: { type: "simple-line", color: "#d7263d", width: 2.5 } }
+    });
+
+    // What the reader sees: the route on the ground (single line) and the stretches on a dam (double line)
+    const routeBaseLayer = new FeatureLayer({
+        url: URL_ROUTE_DAMS, minScale: 0, maxScale: 0, popupEnabled: false, visible: false,
+        blendMode: "multiply",
+        renderer: { type: "simple", symbol: { type: "simple-line", color: "#d7263d", width: 2.5 } }
+    });
+    const routeDamLayer = new FeatureLayer({
+        url: URL_ROUTE_DAMS, minScale: 0, maxScale: 0, popupEnabled: false, visible: false,
+        blendMode: "multiply",
+        renderer: { type: "simple", symbol: doubleLineSymbol(2.5, 2.5) }
+    });
+    routeBaseLayer.when(() => findDamFilter(routeBaseLayer).then(flt => {
+        if (flt) {
+            routeBaseLayer.definitionExpression = damSql(flt, false);
+            routeDamLayer.definitionExpression = damSql(flt, true);
+        } else {
+            console.warn("No attribute marking the dam stretches was found: the route is drawn as a single line.");
+            routeDamLayer.definitionExpression = "1=0";
+        }
+        routeBaseLayer.visible = true;
+        routeDamLayer.visible = true;
+    }), err => {
+        console.warn("The split route could not be loaded, the whole route is shown instead", err);
+        routeLayer.visible = true;
     });
 
     const pointsLayer = new FeatureLayer({
@@ -479,7 +550,7 @@ require([
     const useEsri = BASEMAP === "esri-gray";
     const map = new Map({
         basemap: useEsri ? "gray-vector" : null,
-        layers: (useEsri ? [] : [waterTiles]).concat([bandsLayer, routeLayer, pointsLayer, tooltipLayer, labelLayer])   // labels on top of everything
+        layers: (useEsri ? [] : [waterTiles]).concat([bandsLayer, routeLayer, routeBaseLayer, routeDamLayer, pointsLayer, tooltipLayer, labelLayer])   // labels on top of everything
     });
 
     // The Esri basemap is drawn from vector tiles. Its text labels are hidden by default
@@ -605,12 +676,29 @@ require([
         return "https://player.vimeo.com/video/" + id + "?dnt=1" + (autoplay ? "&autoplay=1" : "");
     }
 
+    // If Vimeo does not allow this video to be embedded on this site, a clear link replaces the player.
+    // The check uses Vimeo's oEmbed service; if the check itself cannot be made, the player is left as it is.
+    function guardVideo(id) {
+        if (!id) return;
+        fetch("https://vimeo.com/api/oembed.json?url=" + encodeURIComponent("https://vimeo.com/" + id))
+            .then(r => {
+                if (r.status === 401 || r.status === 403 || r.status === 404) blockedVideo(id);
+            })
+            .catch(() => {});
+    }
+    function blockedVideo(id) {
+        if (videoId !== id) return;   // the reader has already moved to another stop
+        track.innerHTML = '<div class="gallery-slide gallery-blocked"><a class="tour-btn" href="https://vimeo.com/' + id + '" target="_blank" rel="noopener">Watch on Vimeo</a></div>';
+        gallery.classList.remove("empty");
+    }
+
     function initGallery(urls) {
         videoId = urls.map(vimeoId).filter(Boolean)[0] || null;
         track.innerHTML = videoId
             ? '<div class="gallery-slide"><iframe src="' + playerUrl(videoId, false) + '" title="Video" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe></div>'
             : "";
         gallery.classList.toggle("empty", !videoId);
+        if (videoId) guardVideo(videoId);
     }
 
     function clearGallery() {

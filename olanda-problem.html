@@ -106,6 +106,8 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--route); outline
 .gallery-track { height: 100%; }
 .gallery-slide { height: 100%; }
 .gallery-slide iframe { width: 100%; height: 100%; border: 0; display: block; }
+.gallery-blocked { display: flex; align-items: center; justify-content: center; background: #E6E6E6; }
+.gallery-blocked .tour-btn { align-self: center; margin: 0; text-decoration: none; }
 .gallery-slide img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .gallery-credit {
     position: absolute; left: 0; bottom: 0; z-index: 2;
@@ -323,11 +325,10 @@ body.panel-open .legend { right: calc(var(--panel-width) + 12px); }
 <div class="legend">
     <p>Land elevation relative to sea level</p>
     <ul>
-        <li><span class="sw" style="background:#004b70"></span>Below sea level</li>
+        <li><span class="sw" id="swBelow" style="background:#BEBEBE"></span>Below sea level</li>
         <li><span class="sw" style="background:#52c5ff"></span>0 to 2 m above sea level</li>
         <li><span class="sw" style="background:#a8e2ff"></span>2 to 4 m above sea level</li>
         <li><span class="sw" style="border:0"><svg viewBox="0 0 16 16" width="16" height="16"><circle cx="8" cy="8" r="4.5" fill="#000" stroke="#fff" stroke-width="1.2"/></svg></span>Drowned village</li>
-        <li><span class="sw" style="border:0"><svg viewBox="0 0 16 16" width="16" height="16"><circle cx="8" cy="8" r="3.5" fill="#d7263d" stroke="#fff" stroke-width="1"/></svg></span>Delta Works</li>
     </ul>
 </div>
 
@@ -356,7 +357,6 @@ require([
     // ── DATA ──
     const BASE       = "https://services3.arcgis.com/zhmVWeFi3qKWY2Y8/arcgis/rest/services/";
     const URL_BANDS  = BASE + "DTM10_0_2_4m_4326_less/FeatureServer/0";
-    const URL_ROUTE  = BASE + "TRACK_OLANDA_DEF_4326/FeatureServer/0";
     const URL_POINTS = BASE + "WAYPOINTS_OLANDA_DEF_4326/FeatureServer/1";
     // Drowned villages: open data of the Province of Zeeland (WFS, layer "Verdronken dorpen", requested as GeoJSON in WGS84).
     // If the server blocks the request from this page, download the GeoJSON from this address, publish it on ArcGIS Online
@@ -428,8 +428,8 @@ require([
         },
         text: "Between the harbour of Colijnsplaat and the Zeeland Bridge, a tower with a staircase recalls the storm floods that swallowed almost all of Noord-Beveland. The names of 117 drowned villages are inscribed on its steps. A voice recites dates, among them 1404 (St Elizabeth's Flood) and 1530 (St Felix's Flood), between the sounds of wind and water. The artwork is by Lydia Schouten."
     };
-    // Used only if the route cannot be loaded: order of the stops along the route
-    const ORDER_FALLBACK = [43, 65];
+    // Order of the stops: from the drowned land, to its monument, to the 1953 flood that leads into the Solution map
+    const STOP_ORDER = [43, "monument", 65];
     // What the user sees when the map opens: the whole route (bounding box of the track plus a 6% margin)
     const HOME = new Extent({ xmin: 3.578, ymin: 51.372, xmax: 4.276, ymax: 51.760, spatialReference: { wkid: 4326 } });
     // Space kept free around the whole route when the map opens
@@ -484,8 +484,6 @@ require([
         };
     }
     const STOP_SIZE = 16;            // normal stop
-    // The dams of the Solution map, shown here as small red dots. Set to false to hide them.
-    const SHOW_DAMS = true;
     // Static map: the view always shows the whole route; the arrows only change the panel and move the highlight.
     const STATIC_MAP = true;
     // true = the panel opens with an introduction and the "Start the tour" button; false = it opens on the first stop
@@ -500,26 +498,57 @@ require([
     }
 
     // Land that lies below sea level or only a few metres above it. The land above 4 m and the water are not drawn.
+    // Land 0 to 4 m above sea level: two blues, multiplied with the basemap
     const bandsLayer = new FeatureLayer({
         url: URL_BANDS, minScale: 0, maxScale: 0, popupEnabled: false,
-        definitionExpression: "DN IN (1, 2, 3)",
+        definitionExpression: "DN IN (2, 3)",
         blendMode: "multiply",   // the basemap shows through the colours
         renderer: {
             type: "unique-value", field: "DN",
             uniqueValueInfos: [
-                { value: "1", symbol: fill("#004b70") },  // below sea level
                 { value: "2", symbol: fill("#52c5ff") },  // 0 to 2 m
                 { value: "3", symbol: fill("#a8e2ff") }   // 2 to 4 m
             ]
         }
     });
 
-    // The cycle route, dashed
-    const routeLayer = new FeatureLayer({
-        url: URL_ROUTE, minScale: 0, maxScale: 0, popupEnabled: false,
-        blendMode: "multiply",   // the route is multiplied with the basemap, so the background shows through
-        renderer: { type: "simple", symbol: { type: "simple-line", color: "#d7263d", width: 2.5, style: "dash" } }
+    // Land below sea level: solid grey, a little darker than the sea of the basemap (area and outline).
+    // The grey is worked out from the sea colour of the basemap once it has loaded; this is the colour used until then.
+    const GRAY_FACTOR = 0.9;   // 1 = same as the sea, lower = darker
+    function grayFill(v) {
+        return { type: "simple-fill", color: [v, v, v, 1], outline: { color: [v, v, v, 1], width: 0.75 } };
+    }
+    const belowSeaLayer = new FeatureLayer({
+        url: URL_BANDS, minScale: 0, maxScale: 0, popupEnabled: false,
+        definitionExpression: "DN = 1",
+        renderer: { type: "simple", symbol: grayFill(190) }
     });
+    function setBelowSeaGray(seaRgb) {
+        const lum = 0.2126 * seaRgb[0] + 0.7152 * seaRgb[1] + 0.0722 * seaRgb[2];
+        const v = Math.max(0, Math.min(255, Math.round(lum * GRAY_FACTOR)));
+        belowSeaLayer.renderer = { type: "simple", symbol: grayFill(v) };
+        const sw = document.getElementById("swBelow");
+        if (sw) sw.style.background = "rgb(" + v + "," + v + "," + v + ")";
+        console.info("Below sea level grey: " + v + " (sea colour of the basemap: " + seaRgb.join(",") + ")");
+    }
+    // Reads the sea (water fill) colour from the style of the vector basemap
+    function seaColorFromStyle(st) {
+        const water = st.layers.filter(sl => sl.type === "fill" && /water/i.test(sl.id) && sl.paint && sl.paint["fill-color"]);
+        for (let k = 0; k < water.length; k++) {
+            let col = water[k].paint["fill-color"];
+            if (col && col.stops && col.stops.length) col = col.stops[0][1];
+            if (typeof col !== "string") continue;
+            const ctx = document.createElement("canvas").getContext("2d");
+            ctx.fillStyle = "#000000";
+            ctx.fillStyle = col;
+            const v = ctx.fillStyle;
+            const m = v.charAt(0) === "#"
+                ? [parseInt(v.slice(1, 3), 16), parseInt(v.slice(3, 5), 16), parseInt(v.slice(5, 7), 16)]
+                : (v.match(/[\d.]+/g) || []).slice(0, 3).map(Number);
+            if (m.length === 3 && m.every(n => !isNaN(n))) return m;
+        }
+        return null;
+    }
 
     // The drowned villages: small black dots with a white edge. Their names appear when the map is zoomed in.
     const drownedSymbol = { type: "simple-marker", style: "circle", size: 6, color: "#000000", outline: { color: "#ffffff", width: 1 } };
@@ -545,17 +574,6 @@ require([
         }];
     }, err => console.warn("Drowned villages could not be loaded", err));
 
-    // The dams, as small red dots (no labels, not clickable)
-    const questionLayer = new FeatureLayer({
-        url: URL_POINTS,
-        definitionExpression: "mappa = 'Solution'",
-        minScale: 0, maxScale: 0, popupEnabled: false, visible: SHOW_DAMS,
-        renderer: {
-            type: "simple",
-            symbol: { type: "simple-marker", style: "circle", size: 6, color: "#d7263d", outline: { color: "#ffffff", width: 0.75 } }
-        }
-    });
-
     // The two stops of this map: the Flood Disaster Museum and the drowned villages
     const pointsLayer = new FeatureLayer({
         url: URL_POINTS, outFields: ["*"],
@@ -574,7 +592,7 @@ require([
     const useEsri = true;   // the basemap is Esri Light Gray Canvas, as in the Solution map
     const map = new Map({
         basemap: "gray-vector",
-        layers: [bandsLayer, routeLayer, drownedLayer, questionLayer, pointsLayer, extraLayer, tooltipLayer, labelLayer]   // labels on top of everything
+        layers: [bandsLayer, belowSeaLayer, drownedLayer, pointsLayer, extraLayer, tooltipLayer, labelLayer]   // labels on top of everything
     });
 
     // The Esri basemap is drawn from vector tiles. Its text labels are hidden by default
@@ -601,6 +619,8 @@ require([
                 layer.load().then(() => {
                     const st = layer.currentStyleInfo && layer.currentStyleInfo.style;
                     if (!st || !st.layers) { console.warn("Basemap style cannot be read"); return; }
+                    const sea = seaColorFromStyle(st);
+                    if (sea) setBelowSeaGray(sea);
                     const symbols = st.layers.filter(sl => sl.type === "symbol");
                     let texts = symbols.filter(sl => sl.layout && sl.layout["text-field"]);
                     if (!texts.length) texts = symbols;   // fallback: every symbol layer counts as a label
@@ -711,6 +731,22 @@ require([
 
     // The photo comes first. If the stop also has a video, a play button swaps the photo for the player.
     // Without a photo the video is shown straight away.
+    // If Vimeo does not allow this video to be embedded on this site, a clear link replaces the player.
+    // The check uses Vimeo's oEmbed service; if the check itself cannot be made, the player is left as it is.
+    function guardVideo(id) {
+        if (!id) return;
+        fetch("https://vimeo.com/api/oembed.json?url=" + encodeURIComponent("https://vimeo.com/" + id))
+            .then(r => {
+                if (r.status === 401 || r.status === 403 || r.status === 404) blockedVideo(id);
+            })
+            .catch(() => {});
+    }
+    function blockedVideo(id) {
+        if (videoId !== id) return;   // the reader has already moved to another stop
+        track.innerHTML = '<div class="gallery-slide gallery-blocked"><a class="tour-btn" href="https://vimeo.com/' + id + '" target="_blank" rel="noopener">Watch on Vimeo</a></div>';
+        gallery.classList.remove("empty");
+    }
+
     function initGallery(urls, image) {
         videoId = urls.map(vimeoId).filter(Boolean)[0] || null;
         galleryImage = image || null;
@@ -728,12 +764,14 @@ require([
                     gallery.classList.add("empty");      // no photo at all: the frame disappears
                 } else {
                     track.innerHTML = videoSlide(false);
+                    guardVideo(videoId);
                 }
             });
             const playBtn = document.getElementById("playBtn");
-            if (playBtn) playBtn.addEventListener("click", () => { track.innerHTML = videoSlide(true); });
+            if (playBtn) playBtn.addEventListener("click", () => { track.innerHTML = videoSlide(true); guardVideo(videoId); });
         } else {
             track.innerHTML = videoId ? videoSlide(false) : "";
+            if (videoId) guardVideo(videoId);
         }
         gallery.classList.toggle("empty", !galleryImage && !videoId);
     }
@@ -1117,16 +1155,7 @@ require([
         qp.returnGeometry = true;
         qp.outSpatialReference = view.spatialReference;
 
-        const qr = routeLayer.createQuery();
-        qr.where = "1=1";
-        qr.outFields = [];
-        qr.returnGeometry = true;
-        qr.outSpatialReference = view.spatialReference;
-
-        return Promise.all([
-            pointsLayer.queryFeatures(qp),
-            routeLayer.queryFeatures(qr).catch(() => null)
-        ]);
+        return Promise.all([pointsLayer.queryFeatures(qp)]);
     }).then(res => {
         const feats = res[0].features.slice();
 
@@ -1139,23 +1168,14 @@ require([
         });
         extraLayer.add(monument);
         feats.push(monument);
-        const rf = res[1] && res[1].features && res[1].features[0];
-        if (rf && rf.geometry && rf.geometry.paths) buildRoute(rf.geometry);
 
-        if (route.ok) {
-            // Stops are ordered as they appear along the route
-            feats.forEach(f => { f.vi = nearestVertex(f.geometry.x, f.geometry.y).index; });
-            feats.sort((a, b) => a.vi - b.vi);
-        } else {
-            feats.sort((a, b) => {
-                const ia = ORDER_FALLBACK.indexOf(a.attributes.node), ib = ORDER_FALLBACK.indexOf(b.attributes.node);
-                return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
-            });
-        }
+        // Stops in the order of the story
+        const rank = f => { const k = STOP_ORDER.indexOf(f.attributes.node == null ? "monument" : f.attributes.node); return k < 0 ? 99 : k; };
+        feats.sort((a, b) => rank(a) - rank(b));
         allPoints = feats;
         placeLabels();
 
-        // The map opens on the whole route
+        // The map opens on the whole area
         if (STATIC_MAP) {
             if (START_WITH_INTRO) showIntro(); else selectPoint(0);
         } else {
