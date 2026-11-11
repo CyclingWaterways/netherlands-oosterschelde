@@ -227,12 +227,15 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--route); outline
 /* Legend of the elevation bands */
 .legend {
     position: fixed; z-index: 800;
-    left: 12px; bottom: 28px;
+    right: 12px; top: 12px;
+    transition: right 0.35s ease;
     background: rgba(255,255,255,0.92);
     border: 1px solid var(--line);
     padding: 8px 12px 6px;
     font-size: 14px; line-height: 1.2;
 }
+/* When the side panel is open the legend moves to its left */
+body.panel-open .legend { right: calc(var(--panel-width) + 12px); }
 .legend p { font-weight: 600; margin-bottom: 6px; }
 .legend ul { list-style: none; }
 .legend li { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; }
@@ -539,6 +542,7 @@ require([
     // ── MAP PADDING — keeps the point centred in the part of the map not covered by the panel ──
     function updateMapPadding() {
         const open = panel.classList.contains("visible");
+        document.body.classList.toggle("panel-open", open);
         view.padding = open ? { top: 0, bottom: 0, left: 0, right: panel.offsetWidth } : HOME_PADDING;
     }
 
@@ -942,7 +946,7 @@ require([
         loader.classList.add("hidden");
         setTimeout(() => loader.style.display = "none", 700);
 
-        view.ui.move("zoom", "top-right");
+        view.ui.move("zoom", "top-left");
         if (useEsri) {
             const labelsBtn = document.getElementById("labelsBtn");
             labelsBtn.style.display = "flex";
@@ -952,7 +956,7 @@ require([
                 labelsBtn.setAttribute("aria-pressed", String(labelsOn));
                 labelsBtn.title = labelsOn ? "Hide labels" : "Show labels";
             });
-            view.ui.add(labelsBtn, "top-right");
+            view.ui.add(labelsBtn, "top-left");   // under the zoom buttons
         }
 
         const qp = pointsLayer.createQuery();
