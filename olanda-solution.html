@@ -862,7 +862,11 @@ require([
     }
 
     function navigatePrevious() { selectPoint(currentIdx <= 0 ? allPoints.length - 1 : currentIdx - 1); }
-    function navigateNext() { selectPoint(currentIdx < 0 ? 0 : currentIdx + 1); }
+    // On the last stop the next arrow ends the tour: the map goes back to the opening view
+    function navigateNext() {
+        if (currentIdx === allPoints.length - 1) { closePanel(); return; }
+        selectPoint(currentIdx < 0 ? 0 : currentIdx + 1);
+    }
 
     startBtn.addEventListener("click", () => selectPoint(0));
     document.getElementById("prevBtn").addEventListener("click", navigatePrevious);
