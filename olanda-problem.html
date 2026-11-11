@@ -240,6 +240,7 @@ body.panel-open .legend { right: calc(var(--panel-width) + 12px); }
 .legend ul { list-style: none; }
 .legend li { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; }
 .sw { flex: 0 0 16px; height: 16px; border: 1px solid rgba(0,0,0,0.25); }
+.sw svg { display: block; }
 
 /* ArcGIS overrides */
 .esri-ui-corner { margin: 12px; }
@@ -311,6 +312,7 @@ body.panel-open .legend { right: calc(var(--panel-width) + 12px); }
         <li><span class="sw" style="background:#004b70"></span>Below sea level</li>
         <li><span class="sw" style="background:#52c5ff"></span>0 to 2 m above sea level</li>
         <li><span class="sw" style="background:#a8e2ff"></span>2 to 4 m above sea level</li>
+        <li><span class="sw" style="border:0"><svg viewBox="0 0 16 16" width="16" height="16"><circle cx="8" cy="8" r="4.5" fill="#000" stroke="#fff" stroke-width="1.2"/></svg></span>Drowned village</li>
     </ul>
 </div>
 
@@ -332,15 +334,20 @@ body.panel-open .legend { right: calc(var(--panel-width) + 12px); }
 
 <script>
 require([
-    "esri/Map", "esri/views/MapView", "esri/layers/FeatureLayer", "esri/layers/GraphicsLayer",
+    "esri/Map", "esri/views/MapView", "esri/layers/FeatureLayer", "esri/layers/GraphicsLayer", "esri/layers/GeoJSONLayer",
     "esri/Graphic", "esri/geometry/Extent", "esri/geometry/Point", "esri/geometry/support/webMercatorUtils"
-], function (Map, MapView, FeatureLayer, GraphicsLayer, Graphic, Extent, Point, webMercatorUtils) {
+], function (Map, MapView, FeatureLayer, GraphicsLayer, GeoJSONLayer, Graphic, Extent, Point, webMercatorUtils) {
 
     // ── DATA ──
     const BASE       = "https://services3.arcgis.com/zhmVWeFi3qKWY2Y8/arcgis/rest/services/";
     const URL_BANDS  = BASE + "DTM10_0_2_4m_4326_less/FeatureServer/0";
     const URL_ROUTE  = BASE + "TRACK_OLANDA_DEF_4326/FeatureServer/0";
     const URL_POINTS = BASE + "WAYPOINTS_OLANDA_DEF_4326/FeatureServer/1";
+    // Drowned villages: open data of the Province of Zeeland (WFS, layer "Verdronken dorpen", requested as GeoJSON in WGS84).
+    // If the server blocks the request from this page, download the GeoJSON from this address, publish it on ArcGIS Online
+    // and put the address of the hosted layer in URL_DROWNED_HOSTED.
+    const URL_DROWNED = "https://opengeodata.zeeland.nl/geoserver/chs/wfs?service=WFS&version=2.0.0&request=GetFeature&typeNames=chs:geocmd_vrddrppnt&outputFormat=application/json&srsName=EPSG:4326";
+    const URL_DROWNED_HOSTED = "";
 
     // Map scale used for every stop (1 : SCALE_STOP). Smaller number = closer.
     // The view is controlled by scale, not by zoom levels, so the stop scale is the same whatever the basemap.
@@ -443,6 +450,30 @@ require([
         renderer: { type: "simple", symbol: { type: "simple-line", color: "#d7263d", width: 2.5, style: "dash" } }
     });
 
+    // The drowned villages: small black dots with a white edge. Their names appear when the map is zoomed in.
+    const drownedSymbol = { type: "simple-marker", style: "circle", size: 6, color: "#000000", outline: { color: "#ffffff", width: 1 } };
+    const drownedLayer = URL_DROWNED_HOSTED
+        ? new FeatureLayer({ url: URL_DROWNED_HOSTED, minScale: 0, maxScale: 0, popupEnabled: false, renderer: { type: "simple", symbol: drownedSymbol } })
+        : new GeoJSONLayer({ url: URL_DROWNED, title: "Drowned villages", copyright: "Provincie Zeeland (opengeodata.zeeland.nl)", minScale: 0, maxScale: 0, popupEnabled: false, renderer: { type: "simple", symbol: drownedSymbol } });
+
+    // The name field is not known in advance: the first text field that looks like a name is used for the labels
+    drownedLayer.when(() => {
+        const nameField = drownedLayer.fields.find(f => f.type === "string" && /naam|name|dorp/i.test(f.name));
+        console.info("Drowned villages: " + (nameField ? "name field = " + nameField.name : "no name field found") +
+            " | fields: " + drownedLayer.fields.map(f => f.name).join(", "));
+        if (!nameField) return;
+        drownedLayer.labelingInfo = [{
+            labelExpressionInfo: { expression: "$feature['" + nameField.name + "']" },
+            labelPlacement: "above-right",
+            minScale: 200000,   // labels only when zoomed in beyond 1:200,000
+            symbol: {
+                type: "text", color: "#000000",
+                font: { size: 11, family: "Barlow Semi Condensed, Barlow, sans-serif" },
+                haloColor: "white", haloSize: 1.5
+            }
+        }];
+    }, err => console.warn("Drowned villages could not be loaded", err));
+
     // Question marks where the dams will appear in the Solution map
     const qSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">' +
         '<circle cx="12" cy="12" r="10.5" fill="white" stroke="black" stroke-width="1.5"/>' +
@@ -475,7 +506,7 @@ require([
     const useEsri = true;   // the basemap is Esri Light Gray Canvas, as in the Solution map
     const map = new Map({
         basemap: "gray-vector",
-        layers: [bandsLayer, routeLayer, questionLayer, pointsLayer, extraLayer, tooltipLayer, labelLayer]   // labels on top of everything
+        layers: [bandsLayer, routeLayer, drownedLayer, questionLayer, pointsLayer, extraLayer, tooltipLayer, labelLayer]   // labels on top of everything
     });
 
     // The Esri basemap is drawn from vector tiles. Its text labels are hidden by default
