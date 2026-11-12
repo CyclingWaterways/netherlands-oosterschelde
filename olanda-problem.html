@@ -1035,11 +1035,13 @@ require([
         const f = allPoints[currentIdx];
 
         if (STATIC_MAP) {
-            // The map does not move: only the panel and the highlight change
+            // Only the panel and the highlight change; if the reader has zoomed or moved the map,
+            // it goes back to the whole area (start button, arrows, keyboard)
             showSidePanel(currentIdx);
             showPointTooltip(f);
             updateMapPadding();
             setArrows(true);
+            fitHome(true).catch(noop);
             return;
         }
 
