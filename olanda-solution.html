@@ -231,6 +231,24 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--route); outline
 .labels-btn { width: 26px; height: 26px; margin-top: 2px; font-size: 12px; font-weight: 600; }
 .sq-btn[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
 
+/* Legend */
+.legend {
+    position: fixed; z-index: 800;
+    right: 12px; top: 12px;
+    transition: right 0.35s ease;
+    background: rgba(255,255,255,0.92);
+    border: 1px solid var(--line);
+    padding: 8px 12px 6px;
+    font-size: 14px; line-height: 1.2;
+}
+/* When the side panel is open the legend moves to its left */
+body.panel-open .legend { right: calc(var(--panel-width) + 12px); }
+.legend p { font-weight: 600; margin-bottom: 6px; }
+.legend ul { list-style: none; }
+.legend li { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; }
+.sw { flex: 0 0 16px; height: 16px; border: 1px solid rgba(0,0,0,0.25); }
+.sw svg { display: block; }
+
 /* ArcGIS overrides */
 .esri-ui-corner { margin: 12px; }
 .esri-widget--button { border-radius: 0 !important; }
@@ -293,6 +311,15 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--route); outline
 
 <!-- Labels on / off (moved into the ArcGIS UI, under the zoom buttons) -->
 <button class="sq-btn labels-btn" id="labelsBtn" aria-pressed="false" title="Show labels" style="display:none">Aa</button>
+
+<!-- Legend -->
+<div class="legend">
+    <ul>
+        <li><span class="sw" style="border:0"><svg viewBox="0 0 16 16" width="16" height="16"><line x1="0" y1="8" x2="16" y2="8" stroke="#d7263d" stroke-width="2.5"/></svg></span>Cycle route on land</li>
+        <li><span class="sw" style="border:0"><svg viewBox="0 0 16 16" width="16" height="16"><line x1="0" y1="5.5" x2="16" y2="5.5" stroke="#d7263d" stroke-width="2"/><line x1="0" y1="10.5" x2="16" y2="10.5" stroke="#d7263d" stroke-width="2"/></svg></span>Cycle route on a dam</li>
+        <li><span class="sw" style="border:0"><svg viewBox="0 0 64 64" width="16" height="16"><circle cx="32" cy="32" r="26" fill="none" stroke="#000" stroke-width="4.5"/><circle cx="32" cy="32" r="16" fill="none" stroke="#000" stroke-width="4.5"/><circle cx="32" cy="32" r="7" fill="#f00"/></svg></span>Delta Works</li>
+    </ul>
+</div>
 
 <!-- Previous / next stop, floating on the map -->
 <button class="sq-btn stop-nav" id="prevBtn" aria-label="Previous stop" title="Previous stop">
@@ -618,6 +645,7 @@ require([
     // ── MAP PADDING — keeps the point centred in the part of the map not covered by the panel ──
     function updateMapPadding() {
         const open = panel.classList.contains("visible");
+        document.body.classList.toggle("panel-open", open);
         view.padding = open ? { top: 0, bottom: 0, left: 0, right: panel.offsetWidth } : HOME_PADDING;
     }
 
