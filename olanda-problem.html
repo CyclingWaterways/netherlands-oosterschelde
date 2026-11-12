@@ -1086,7 +1086,17 @@ require([
     }
 
     function navigatePrevious() { selectPoint(currentIdx <= 0 ? allPoints.length - 1 : currentIdx - 1); }
-    function navigateNext() { selectPoint(currentIdx < 0 ? 0 : currentIdx + 1); }
+    // On the last stop the next arrow ends the tour: the panel goes back to the introduction
+    // with the "Start the tour" button, and the map to the whole area (as in the Solution map)
+    function navigateNext() {
+        if (currentIdx === allPoints.length - 1) {
+            started = false;
+            if (START_WITH_INTRO) showIntro();
+            fitHome(true).catch(noop);
+            return;
+        }
+        selectPoint(currentIdx < 0 ? 0 : currentIdx + 1);
+    }
 
     startBtn.addEventListener("click", () => selectPoint(0));
     document.getElementById("prevBtn").addEventListener("click", navigatePrevious);
