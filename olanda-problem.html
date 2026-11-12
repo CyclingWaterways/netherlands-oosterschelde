@@ -567,7 +567,7 @@ require([
         return null;
     }
 
-    // The drowned villages: small black dots with a white edge. Their names appear when the map is zoomed in.
+    // The drowned villages: small black dots with a white edge. Their names appear only under the mouse.
     const drownedSymbol = { type: "simple-marker", style: "circle", size: 6, color: "#000000", outline: { color: "#ffffff", width: 1 } };
     const drownedLayer = URL_DROWNED_HOSTED
         ? new FeatureLayer({ url: URL_DROWNED_HOSTED, outFields: ["*"], minScale: 0, maxScale: 0, popupEnabled: false, renderer: { type: "simple", symbol: drownedSymbol } })
@@ -576,23 +576,13 @@ require([
     // Fields used for the labels and for the box that appears over a village (found when the layer loads)
     let villageFields = { name: null };
 
-    // The name field is not known in advance: the first text field that looks like a name is used for the labels
+    // The name field is not known in advance: the first text field that looks like a name is used.
+    // The names are not written on the map: they appear only in the box under the mouse.
     drownedLayer.when(() => {
         const nameField = drownedLayer.fields.find(f => f.type === "string" && /naam|name|dorp/i.test(f.name));
         villageFields = { name: nameField ? nameField.name : null };
         console.info("Drowned villages: " + (nameField ? "name field = " + nameField.name : "no name field found") +
             " | fields: " + drownedLayer.fields.map(f => f.name).join(", "));
-        if (!nameField) return;
-        drownedLayer.labelingInfo = [{
-            labelExpressionInfo: { expression: "$feature['" + nameField.name + "']" },
-            labelPlacement: "above-right",
-            minScale: 200000,   // labels only when zoomed in beyond 1:200,000
-            symbol: {
-                type: "text", color: "#000000",
-                font: { size: 11, family: "Barlow Semi Condensed, Barlow, sans-serif" },
-                haloColor: "white", haloSize: 1.5
-            }
-        }];
     }, err => console.warn("Drowned villages could not be loaded", err));
 
     // The two stops of this map: the Flood Disaster Museum and the drowned villages
