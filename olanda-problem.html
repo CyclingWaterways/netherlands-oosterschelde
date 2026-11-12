@@ -240,6 +240,20 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--route); outline
 }
 .tour-btn:hover { background: var(--route); }
 
+/* Box with the name of a drowned village */
+.village-tip {
+    position: fixed; z-index: 900;
+    pointer-events: none;
+    display: none;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    padding: 4px 8px;
+    font-size: 14px; line-height: 1.3;
+    max-width: 240px;
+}
+.village-tip.on { display: block; }
+.village-tip { font-weight: 600; }
+
 /* Legend of the elevation bands */
 .legend {
     position: fixed; z-index: 800;
@@ -320,6 +334,9 @@ body.panel-open .legend { right: calc(var(--panel-width) + 12px); }
 
 <!-- Labels on / off (moved into the ArcGIS UI, under the zoom buttons) -->
 <button class="sq-btn labels-btn" id="labelsBtn" aria-pressed="false" title="Show labels" style="display:none">Aa</button>
+
+<!-- Name of a drowned village, shown over the map -->
+<div id="villageTip" class="village-tip"></div>
 
 <!-- Legend -->
 <div class="legend">
@@ -553,12 +570,16 @@ require([
     // The drowned villages: small black dots with a white edge. Their names appear when the map is zoomed in.
     const drownedSymbol = { type: "simple-marker", style: "circle", size: 6, color: "#000000", outline: { color: "#ffffff", width: 1 } };
     const drownedLayer = URL_DROWNED_HOSTED
-        ? new FeatureLayer({ url: URL_DROWNED_HOSTED, minScale: 0, maxScale: 0, popupEnabled: false, renderer: { type: "simple", symbol: drownedSymbol } })
-        : new GeoJSONLayer({ url: URL_DROWNED, title: "Drowned villages", copyright: "Provincie Zeeland (opengeodata.zeeland.nl)", minScale: 0, maxScale: 0, popupEnabled: false, renderer: { type: "simple", symbol: drownedSymbol } });
+        ? new FeatureLayer({ url: URL_DROWNED_HOSTED, outFields: ["*"], minScale: 0, maxScale: 0, popupEnabled: false, renderer: { type: "simple", symbol: drownedSymbol } })
+        : new GeoJSONLayer({ url: URL_DROWNED, outFields: ["*"], title: "Drowned villages", copyright: "Provincie Zeeland (opengeodata.zeeland.nl)", minScale: 0, maxScale: 0, popupEnabled: false, renderer: { type: "simple", symbol: drownedSymbol } });
+
+    // Fields used for the labels and for the box that appears over a village (found when the layer loads)
+    let villageFields = { name: null };
 
     // The name field is not known in advance: the first text field that looks like a name is used for the labels
     drownedLayer.when(() => {
         const nameField = drownedLayer.fields.find(f => f.type === "string" && /naam|name|dorp/i.test(f.name));
+        villageFields = { name: nameField ? nameField.name : null };
         console.info("Drowned villages: " + (nameField ? "name field = " + nameField.name : "no name field found") +
             " | fields: " + drownedLayer.fields.map(f => f.name).join(", "));
         if (!nameField) return;
@@ -1131,6 +1152,29 @@ require([
         });
     });
 
+
+    // ── NAME OF A DROWNED VILLAGE UNDER THE MOUSE (or under the finger on a phone) ──
+    const villageTip = document.getElementById("villageTip");
+    let tipBusy = false;
+    function villageAt(e) {
+        if (tipBusy || !villageFields.name) return;
+        tipBusy = true;
+        view.hitTest(e, { include: [drownedLayer] }).then(r => {
+            tipBusy = false;
+            const hit = r.results.find(x => x.graphic && x.graphic.layer === drownedLayer);
+            if (!hit) { villageTip.classList.remove("on"); return; }
+            const a = hit.graphic.attributes || {};
+            const name = a[villageFields.name];
+            if (!name) { villageTip.classList.remove("on"); return; }
+            villageTip.textContent = name;   // only the name of the village
+            villageTip.style.left = (e.x + 14) + "px";
+            villageTip.style.top = (e.y + 14) + "px";
+            villageTip.classList.add("on");
+        }).catch(() => { tipBusy = false; });
+    }
+    view.on("pointer-move", villageAt);
+    view.on("click", villageAt);
+    view.on("pointer-leave", () => villageTip.classList.remove("on"));
 
     // ── LOAD ──
     if (STATIC_MAP) {
