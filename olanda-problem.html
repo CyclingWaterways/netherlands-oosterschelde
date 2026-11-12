@@ -428,8 +428,8 @@ require([
         },
         text: "Between the harbour of Colijnsplaat and the Zeeland Bridge, a tower with a staircase recalls the storm floods that swallowed almost all of Noord-Beveland. The names of 117 drowned villages are inscribed on its steps. A voice recites dates, among them 1404 (St Elizabeth's Flood) and 1530 (St Felix's Flood), between the sounds of wind and water. The artwork is by Lydia Schouten."
     };
-    // Order of the stops: from the drowned land, to its monument, to the 1953 flood that leads into the Solution map
-    const STOP_ORDER = [43, "monument", 65];
+    // Order of the stops: drowned land, Flood Disaster Museum (1953), Monument for the Drowned Villages
+    const STOP_ORDER = [43, 65, "monument"];
     // What the user sees when the map opens: the whole route (bounding box of the track plus a 6% margin)
     const HOME = new Extent({ xmin: 3.578, ymin: 51.372, xmax: 4.276, ymax: 51.760, spatialReference: { wkid: 4326 } });
     // Space kept free around the whole route when the map opens
